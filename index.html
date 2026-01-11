@@ -2,15 +2,110 @@
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Titan AR Card - Interactive</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    
+    <script>
+      // 註冊手勢偵測元件
+      AFRAME.registerComponent("gesture-detector", {
+        schema: { element: { default: "" } },
+        init: function() {
+          this.targetElement = this.data.element && document.querySelector(this.data.element);
+          if (!this.targetElement) { this.targetElement = this.el; }
+          this.internalState = { previousState: null };
+          this.emitGestureEvent = this.emitGestureEvent.bind(this);
+          this.targetElement.addEventListener("touchstart", this.emitGestureEvent);
+          this.targetElement.addEventListener("touchend", this.emitGestureEvent);
+          this.targetElement.addEventListener("touchmove", this.emitGestureEvent);
+        },
+        remove: function() {
+          this.targetElement.removeEventListener("touchstart", this.emitGestureEvent);
+          this.targetElement.removeEventListener("touchend", this.emitGestureEvent);
+          this.targetElement.removeEventListener("touchmove", this.emitGestureEvent);
+        },
+        emitGestureEvent: function(event) {
+          const currentState = this.getTouchState(event);
+          const previousState = this.internalState.previousState;
+          const gestureContinues = previousState && currentState && currentState.touchCount == previousState.touchCount;
+          const gestureEnded = previousState && !gestureContinues;
+          const gestureStarted = currentState && !gestureContinues;
+          if (gestureEnded) { this.el.emit("gesture-end"); }
+          if (gestureStarted) { this.el.emit("gesture-start"); }
+          if (gestureContinues) {
+            const detail = {
+              positionChange: { x: currentState.position.x - previousState.position.x, y: currentState.position.y - previousState.position.y },
+              scrollChange: { x: currentState.scroll.x - previousState.scroll.x, y: currentState.scroll.y - previousState.scroll.y },
+              spreadChange: currentState.spread - previousState.spread,
+              startSpread: currentState.startSpread,
+              position: currentState.position
+            };
+            this.el.emit("gesture-move", detail);
+          }
+          this.internalState.previousState = currentState;
+        },
+        getTouchState: function(event) {
+          if (event.touches.length === 0) { return null; }
+          const touchList = [];
+          for (let i = 0; i < event.touches.length; i++) { touchList.push(event.touches[i]); }
+          const touchState = { touchCount: touchList.length };
+          const centerPositionRawX = touchList.reduce((sum, touch) => sum + touch.clientX, 0) / touchList.length;
+          const centerPositionRawY = touchList.reduce((sum, touch) => sum + touch.clientY, 0) / touchList.length;
+          touchState.position = { x: centerPositionRawX, y: centerPositionRawY };
+          touchState.scroll = { x: 0, y: 0 }; 
+          touchState.spread = touchList.length > 1 ? Math.hypot(touchList[0].clientX - touchList[1].clientX, touchList[0].clientY - touchList[1].clientY) : 0;
+          touchState.startSpread = this.internalState.previousState ? this.internalState.previousState.startSpread : touchState.spread;
+          return touchState;
+        }
+      });
+
+      // 註冊手勢操作元件 (旋轉與縮放)
+      AFRAME.registerComponent("gesture-handler", {
+        schema: {
+          enabled: { default: true },
+          rotationFactor: { default: 5 }, // 旋轉靈敏度
+          minScale: { default: 0.1 },     // 最小縮放倍率
+          maxScale: { default: 2.0 },     // 最大縮放倍率
+        },
+        init: function() {
+          this.handleScale = this.handleScale.bind(this);
+          this.handleRotation = this.handleRotation.bind(this);
+          this.isVisible = false;
+          this.initialScale = this.el.object3D.scale.clone();
+          this.scaleFactor = 1;
+          this.el.sceneEl.addEventListener("gesture-move", this.handleRotation);
+          this.el.sceneEl.addEventListener("gesture-move", this.handleScale);
+        },
+        remove: function() {
+          this.el.sceneEl.removeEventListener("gesture-move", this.handleRotation);
+          this.el.sceneEl.removeEventListener("gesture-move", this.handleScale);
+        },
+        handleRotation: function(event) {
+          if (event.detail.spreadChange) { return; } // 如果是雙指縮放動作，就不旋轉
+          this.el.object3D.rotation.y += event.detail.positionChange.x * this.data.rotationFactor * 2 * Math.PI / 1000;
+        },
+        handleScale: function(event) {
+          if (event.detail.spreadChange) {
+            const spreadChange = event.detail.spreadChange;
+            this.scaleFactor *= 1 + spreadChange / this.el.sceneEl.canvas.clientWidth;
+            this.scaleFactor = Math.min(Math.max(this.scaleFactor, this.data.minScale), this.data.maxScale);
+            this.el.object3D.scale.x = this.scaleFactor * this.initialScale.x;
+            this.el.object3D.scale.y = this.scaleFactor * this.initialScale.y;
+            this.el.object3D.scale.z = this.scaleFactor * this.initialScale.z;
+          }
+        }
+      });
+    </script>
   </head>
+  
   <body>
-    <a-scene mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.001;" 
-             color-space="sRGB" 
-             renderer="colorManagement: true, physicallyCorrectLights" 
-             vr-mode-ui="enabled: false" 
-             device-orientation-permission-ui="enabled: false">
+    <a-scene 
+      mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.001;" 
+      color-space="sRGB" 
+      renderer="colorManagement: true, physicallyCorrectLights" 
+      vr-mode-ui="enabled: false" 
+      device-orientation-permission-ui="enabled: false"
+      gesture-detector>
       
       <a-assets>
         <a-asset-item id="avatarModel" src="./titan_model.glb"></a-asset-item>
@@ -20,12 +115,15 @@
 
       <a-entity mindar-image-target="targetIndex: 0">
         
-        <a-gltf-model src="#avatarModel" 
-                      position="0 0 0" 
-                      rotation="0 0 0" 
-                      scale="0.1 0.1 0.1"
-                      animation="property: rotation; from: 0 0 0; to: 0 360 0; loop: true; dur: 10000; easing: linear">
-        </a-gltf-model>
+        <a-gltf-model 
+          src="#avatarModel" 
+          position="0 0 0" 
+          rotation="0 0 0" 
+          scale="0.5 0.5 0.5"
+          class="clickable"
+          gesture-handler
+          animation="property: rotation; from: 0 0 0; to: 0 360 0; loop: true; dur: 10000; easing: linear; isRawProperty: true; enabled: false"> 
+          </a-gltf-model>
 
       </a-entity>
     </a-scene>
