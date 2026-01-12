@@ -3,9 +3,9 @@
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>Titan AR - Persistent Model</title>
+    <title>Titan AR - Full Control</title>
     
-    <!-- 1. 核心庫：A-Frame, MindAR, A-Frame Extras (解決模型動畫與顯示問題) -->
+    <!-- 引入必要的 AR 庫 -->
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
@@ -14,27 +14,26 @@
       body {
         margin: 0;
         overflow: hidden;
-        /* 防止 iOS Safari 下滑動畫面 */
+        /* 關鍵：禁止 iOS Safari 的預設滑動行為，讓手勢專注於模型 */
         touch-action: none; 
       }
-      /* 掃描提示框 UI */
       #ui-scanning {
         position: absolute; left: 0; top: 0; width: 100%; height: 100%;
         display: flex; align-items: center; justify-content: center;
-        background: rgba(0, 0, 0, 0.0); /* 透明背景 */
-        pointer-events: none; /* 讓點擊穿透 */
+        background: rgba(0, 0, 0, 0.0);
+        pointer-events: none; 
         z-index: 999;
       }
       .scan-text {
         background: rgba(0, 0, 0, 0.6);
         color: white; padding: 10px 20px; border-radius: 20px;
         font-family: sans-serif;
+        transition: opacity 0.5s;
       }
     </style>
 
     <script>
-      // --- 1. 手勢偵測 (Gesture Detector) ---
-      // 負責監聽螢幕觸控事件 (單指、雙指)
+      // --- 1. 手勢偵測器 (負責計算手指移動與距離) ---
       AFRAME.registerComponent("gesture-detector", {
         schema: { element: { default: "" } },
         init: function() {
@@ -62,7 +61,10 @@
           if (gestureStarted) { this.el.emit("gesture-start"); }
           if (gestureContinues) {
             const detail = {
-              positionChange: { x: currentState.position.x - previousState.position.x, y: currentState.position.y - previousState.position.y },
+              positionChange: { 
+                x: currentState.position.x - previousState.position.x, 
+                y: currentState.position.y - previousState.position.y 
+              },
               spreadChange: currentState.spread - previousState.spread,
               startSpread: currentState.startSpread,
               position: currentState.position
@@ -85,20 +87,23 @@
         }
       });
 
-      // --- 2. 手勢操作 (Gesture Handler) ---
-      // 負責接收事件並旋轉/縮放模型
+      // --- 2. 手勢處理器 (接收訊號並改變模型) ---
       AFRAME.registerComponent("gesture-handler", {
         schema: {
           enabled: { default: true },
-          rotationFactor: { default: 5 },
-          minScale: { default: 0.1 },
-          maxScale: { default: 3.0 },
+          rotationFactor: { default: 5 }, // 旋轉速度
+          minScale: { default: 0.1 },     // 最小縮放
+          maxScale: { default: 8.0 },     // 最大縮放 (稍微加大以便觀察)
         },
         init: function() {
           this.handleScale = this.handleScale.bind(this);
           this.handleRotation = this.handleRotation.bind(this);
+          
+          this.isVisible = false; 
           this.initialScale = this.el.object3D.scale.clone();
           this.scaleFactor = 1;
+
+          // 監聽場景發出的 gesture-move 事件
           this.el.sceneEl.addEventListener("gesture-move", this.handleRotation);
           this.el.sceneEl.addEventListener("gesture-move", this.handleScale);
         },
@@ -107,18 +112,22 @@
           this.el.sceneEl.removeEventListener("gesture-move", this.handleScale);
         },
         handleRotation: function(event) {
-          // 只處理單指滑動，且模型必須要是可見的
+          // 只有當模型可見且是單指操作時才旋轉
           if (event.detail.spreadChange || !this.el.getAttribute('visible')) { return; }
           
-          // Y軸旋轉 (左右滑動)
+          // X 軸旋轉 (上下滑動)
+          this.el.object3D.rotation.x += event.detail.positionChange.y * this.data.rotationFactor * 2 * Math.PI / 1000;
+          // Y 軸旋轉 (左右滑動)
           this.el.object3D.rotation.y += event.detail.positionChange.x * this.data.rotationFactor * 2 * Math.PI / 1000;
         },
         handleScale: function(event) {
-          // 處理雙指縮放
+          // 只有當模型可見且有雙指縮放變化時才縮放
           if (event.detail.spreadChange && this.el.getAttribute('visible')) {
             const spreadChange = event.detail.spreadChange;
-            this.scaleFactor *= 1 + spreadChange / this.el.sceneEl.canvas.clientWidth;
+            // 調整縮放公式，增加靈敏度
+            this.scaleFactor *= 1 + (spreadChange / this.el.sceneEl.canvas.clientWidth) * 2; 
             this.scaleFactor = Math.min(Math.max(this.scaleFactor, this.data.minScale), this.data.maxScale);
+            
             this.el.object3D.scale.x = this.scaleFactor * this.initialScale.x;
             this.el.object3D.scale.y = this.scaleFactor * this.initialScale.y;
             this.el.object3D.scale.z = this.scaleFactor * this.initialScale.z;
@@ -126,56 +135,58 @@
         }
       });
 
-      // --- 3. 持久化追蹤器 (Persistent Tracker) ---
-      // 這是解決「圖片消失模型還在」的關鍵
+      // --- 3. 持久化邏輯 (Persistence) ---
+      // 確保模型在圖片移開後不會消失
       AFRAME.registerComponent('persistent-tracker', {
         schema: {
-          target: {type: 'selector'} // 指定要追蹤哪個 mindar-image-target
+          target: {type: 'selector'} 
         },
         init: function() {
           this.isTracking = false;
           this.targetEl = this.data.target; 
-          this.container = this.el; // 這是我們放模型的容器
+          this.container = this.el; 
 
-          // 一開始先隱藏模型容器
+          // 初始隱藏
           this.container.setAttribute('visible', false);
-
+          
           const scanText = document.querySelector('.scan-text');
 
-          // 當 MindAR 發現圖片
+          // --- 發現目標 ---
           this.targetEl.addEventListener('targetFound', () => {
-            console.log("Target Found: Generating Model");
+            console.log("FOUND: Syncing position");
             this.isTracking = true;
-            this.container.setAttribute('visible', true); // 顯示模型
+            this.container.setAttribute('visible', true);
             
-            // 播放動畫 (如果模型有的話)
+            // 重置模型動畫
             const model = this.container.querySelector('a-gltf-model');
-            if(model) model.setAttribute('animation-mixer', {clip: '*', loop: 'repeat'});
+            if(model) {
+              model.setAttribute('animation-mixer', {clip: '*', loop: 'repeat'});
+              model.setAttribute('visible', true); // 雙重保險
+            }
 
-            if(scanText) scanText.innerText = "已偵測！移動相機模型將保留";
-            
-            // 讓 UI 提示淡出
-            setTimeout(() => { if(scanText) scanText.style.display = 'none'; }, 2000);
+            if(scanText) {
+                scanText.innerText = "模型已鎖定，可自由移動視角";
+                scanText.style.opacity = '0'; // 淡出文字
+            }
           });
 
-          // 當 MindAR 丟失圖片
+          // --- 目標丟失 ---
           this.targetEl.addEventListener('targetLost', () => {
-            console.log("Target Lost: Model Persisting");
-            this.isTracking = false; 
-            // 這裡不設定 visible=false，所以模型會留在最後的位置
+            console.log("LOST: Stopping sync, keeping model visible");
+            this.isTracking = false;
+            // 重點：這裡絕對不執行 setAttribute('visible', false)
+            // 讓模型停留在最後一次 tick 更新的位置
           });
         },
         tick: function() {
-          // 如果正在追蹤圖片，把容器的位置「吸附」到 Target 的位置
+          // 只有在「真正掃描到圖片」的時候，才把模型的位置吸附到圖片上
           if (this.isTracking && this.targetEl.object3D.visible) {
             const targetObject = this.targetEl.object3D;
             const containerObject = this.container.object3D;
 
-            // 複製世界座標與旋轉
+            // 持續同步位置與旋轉
             containerObject.position.copy(targetObject.position);
             containerObject.quaternion.copy(targetObject.quaternion);
-            
-            // 比例我們交給內部的手勢控制器處理，這裡不複製 scale，以免被 MindAR 覆寫
           }
         }
       });
@@ -183,14 +194,14 @@
   </head>
   
   <body>
-    <!-- 場景設定：gesture-detector 放在這裡 -->
+    <!-- 場景設定 -->
     <a-scene 
       mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.001; uiScanning: no;" 
       color-space="sRGB" 
       renderer="colorManagement: true, physicallyCorrectLights" 
       vr-mode-ui="enabled: false" 
       device-orientation-permission-ui="enabled: false"
-      gesture-detector>
+      gesture-detector> <!-- 啟用手勢偵測 -->
       
       <a-assets>
         <a-asset-item id="avatarModel" src="./titan_model.glb"></a-asset-item>
@@ -198,34 +209,31 @@
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <!-- UI -->
+      <!-- UI 提示 -->
       <div id="ui-scanning"><div class="scan-text">請掃描圖片生成模型</div></div>
 
       <!-- 
-        MindAR 的追蹤目標 (Target Anchor)
-        注意：這裡面是「空的」，我們只用它來取得座標。
-        id="target-anchor" 供 persistent-tracker 使用
+        MindAR 錨點 (隱形) 
+        只用來獲取座標，不放模型
       -->
       <a-entity mindar-image-target="targetIndex: 0" id="target-anchor"></a-entity>
 
       <!-- 
-        獨立的模型容器 (Model Container)
-        它位於場景根目錄，不受 MindAR 自動隱藏的影響。
-        persistent-tracker="target: #target-anchor" 負責讓它跟隨目標。
+        模型容器 (獨立於 MindAR Target 之外)
+        persistent-tracker 負責控制它何時跟隨 anchor
       -->
       <a-entity id="avatar-container" persistent-tracker="target: #target-anchor">
         
         <!-- 
-           實際的模型 (Model Visual)
-           它是容器的子物件。
-           gesture-handler 放在這裡，讓使用者可以對模型進行額外的旋轉/縮放，而不影響跟隨邏輯。
+           實際模型 
+           gesture-handler 放在這裡，控制旋轉與縮放
         -->
         <a-gltf-model 
           id="avatar-model"
           src="#avatarModel" 
           position="0 0 0" 
           rotation="0 0 0" 
-          scale="0.5 0.5 0.5"
+          scale="0.5 0.5 0.5" 
           class="clickable"
           gesture-handler> 
         </a-gltf-model>
