@@ -1,32 +1,49 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Titan AR Card - Ultimate Version</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Titan AR Card - Fixed</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     
     <style>
-      body { margin: 0; }
-      /* iOS Safari 關鍵修復：強制影片與畫布的層級，避免黑屏或轉圈 */
+      /* === 修正重點 1: 完美全螢幕 (解決右側白條) === */
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden; /* 禁止捲動，防止出現白邊 */
+        background-color: black; /* 預防任何縫隙出現白色 */
+      }
+      
+      /* 強制視訊滿版 */
       video {
         position: absolute;
-        top: 0; left: 0;
+        top: 0;
+        left: 0;
         z-index: -2 !important;
-        width: 100% !important; height: 100% !important;
-        object-fit: cover;
+        width: 100vw !important;
+        height: 100vh !important;
+        object-fit: cover !important;
       }
+
+      /* 修正 Canvas 層級 */
       .a-canvas {
-        z-index: 1 !important; 
+        width: 100% !important;
+        height: 100% !important;
         position: absolute !important;
-        top: 0; left: 0;
+        top: 0;
+        left: 0;
+        z-index: 1 !important;
       }
+      
       /* 隱藏 VR 按鈕 */
       .a-enter-vr-button { display: none; }
     </style>
 
     <script>
-      // === 1. 手勢偵測 (無需修改，標準版) ===
+      // === 1. 手勢偵測 (Gesture Detector) ===
       AFRAME.registerComponent("gesture-detector", {
         schema: { element: { default: "" } },
         init: function() {
@@ -76,7 +93,7 @@
         }
       });
 
-      // === 2. 手勢操作升級版 (支援 X/Y 軸旋轉 + 縮放) ===
+      // === 2. 手勢操作器 (Gesture Handler) - 支援 X/Y 軸旋轉與縮放 ===
       AFRAME.registerComponent("gesture-handler", {
         schema: {
           enabled: { default: true },
@@ -97,12 +114,10 @@
           this.el.sceneEl.removeEventListener("gesture-move", this.handleScale);
         },
         handleRotation: function(event) {
-          if (event.detail.spreadChange) { return; } // 雙指縮放時不旋轉
-          
-          // X 軸移動 -> Y 軸旋轉 (左右轉)
+          if (event.detail.spreadChange) { return; } 
+          // 左右滑動 -> Y 軸轉
           this.el.object3D.rotation.y += event.detail.positionChange.x * this.data.rotationFactor * 2 * Math.PI / 1000;
-          
-          // Y 軸移動 -> X 軸旋轉 (上下轉)
+          // 上下滑動 -> X 軸轉
           this.el.object3D.rotation.x += event.detail.positionChange.y * this.data.rotationFactor * 2 * Math.PI / 1000;
         },
         handleScale: function(event) {
@@ -117,42 +132,36 @@
         }
       });
 
-      // === 3. 模型持久化與同步器 (Persistence Logic) ===
-      AFRAME.registerComponent("content-synchronizer", {
+      // === 3. 穩定版模型同步器 (Stable Synchronizer) ===
+      AFRAME.registerComponent("simple-sync", {
         schema: {
-          target: { type: 'selector' }, // 追蹤目標 (卡片)
-          model: { type: 'selector' }   // 顯示模型 (巨人)
+          target: { type: 'selector' },
+          model: { type: 'selector' }
         },
         init: function () {
-          this.targetFound = false;
+          this.isTracking = false;
           
-          // 監聽卡片找到事件
+          // 找到卡片時
           this.data.target.addEventListener("targetFound", () => {
-            console.log("Target Found: Syncing model...");
-            this.targetFound = true;
-            // 第一次找到時，讓模型現身
+            this.isTracking = true;
+            // 只要找到一次，就永久顯示
             this.data.model.setAttribute("visible", true);
           });
 
-          // 監聽卡片遺失事件
+          // 丟失卡片時
           this.data.target.addEventListener("targetLost", () => {
-            console.log("Target Lost: Model persisiting...");
-            this.targetFound = false;
-            // 關鍵：這裡「不」隱藏模型，讓它留在原地
+            this.isTracking = false;
+            // 這裡不做任何事，保持 visible=true (達成持久化)
           });
         },
         tick: function () {
-          // 只有在「卡片被追蹤中」的時候，才把模型的位置鎖定在卡片上
-          if (this.targetFound && this.data.model && this.data.target) {
-            // 同步位置與旋轉
-            const targetObject = this.data.target.object3D;
-            const modelObject = this.data.model.object3D;
-            
-            // 將卡片的世界座標複製給模型
-            modelObject.position.copy(targetObject.position);
-            modelObject.quaternion.copy(targetObject.quaternion);
-            
-            // 注意：我們不同步 Scale，因為使用者可能正在用手指縮放它
+          // 只有在「當下正在追蹤」時，才更新位置
+          // 這樣卡片移開後，模型會停留在「最後一次看到卡片」的位置
+          if (this.isTracking && this.data.target && this.data.model) {
+            const targetObj = this.data.target.object3D;
+            const modelObj = this.data.model.object3D;
+            modelObj.position.copy(targetObj.position);
+            modelObj.quaternion.copy(targetObj.quaternion);
           }
         }
       });
@@ -164,38 +173,4 @@
       mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.001; uiLoading: yes; uiScanning: yes;" 
       color-space="sRGB" 
       renderer="colorManagement: true, physicallyCorrectLights" 
-      vr-mode-ui="enabled: false" 
-      device-orientation-permission-ui="enabled: false"
-      gesture-detector>
-      
-      <a-assets>
-        <a-asset-item id="avatarModel" src="./titan_model.glb"></a-asset-item>
-      </a-assets>
-
-      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-
-      <a-entity 
-        id="image-target" 
-        mindar-image-target="targetIndex: 0"
-        content-synchronizer="target: #image-target; model: #avatar-container">
-      </a-entity>
-
-      <a-entity 
-        id="avatar-container" 
-        visible="false" 
-        class="clickable" 
-        gesture-handler>
-        
-        <a-gltf-model 
-          src="#avatarModel" 
-          position="0 0 0" 
-          rotation="0 0 0" 
-          scale="0.5 0.5 0.5" 
-          animation="property: rotation; from: 0 0 0; to: 0 360 0; loop: true; dur: 10000; easing: linear; enabled: false">
-        </a-gltf-model>
-
-      </a-entity>
-
-    </a-scene>
-  </body>
-</html>
+      vr-mode-ui="enabled: false"
