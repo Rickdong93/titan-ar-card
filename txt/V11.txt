@@ -3,8 +3,7 @@
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <!-- 標題會顯示在瀏覽器分頁，但在手機全螢幕模式下看不到 -->
-    <title>rniko 特製A賞特典</title>
+    <title>Titan AR - Standard Version</title>
     
     <!-- 1. 核心庫 -->
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
@@ -15,87 +14,14 @@
       body {
         margin: 0;
         overflow: hidden;
-        font-family: 'Microsoft JhengHei', sans-serif;
-        background-color: black; /* 預設黑底避免白屏閃爍 */
-        /* 禁止 iOS 預設畫面滑動 */
+        /* 禁止 iOS 預設畫面滑動，確保手勢操作順暢 */
         touch-action: none; 
-      }
-
-      /* --- 客製化 Loading 畫面 --- */
-      #custom-loading {
-        position: fixed;
-        top: 0; left: 0; width: 100%; height: 100%;
-        background: #000;
-        z-index: 99999;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        transition: opacity 0.5s ease-out;
-      }
-      
-      .loading-text {
-        color: white;
-        font-size: 20px;
-        font-weight: bold;
-        margin-bottom: 20px;
-        letter-spacing: 2px;
-        text-align: center;
-      }
-
-      .progress-container {
-        width: 200px;
-        height: 6px;
-        background: rgba(255, 255, 255, 0.2);
-        border-radius: 3px;
-        overflow: hidden;
-      }
-
-      .progress-bar {
-        width: 0%;
-        height: 100%;
-        background: #fff;
-        box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
-        animation: loadProgress 2.5s ease-in-out forwards;
-      }
-
-      @keyframes loadProgress {
-        0% { width: 0%; }
-        50% { width: 60%; }
-        80% { width: 80%; }
-        100% { width: 95%; } /* 最後 5% 等到 loaded 事件觸發時補滿 */
-      }
-
-      /* 隱藏 A-Frame 預設的 VR 按鈕 */
-      .a-enter-vr-button {
-        display: none !important;
       }
     </style>
 
     <script>
-      // --- 1. Loading 控制邏輯 ---
-      document.addEventListener("DOMContentLoaded", function() {
-        const scene = document.querySelector('a-scene');
-        const loader = document.querySelector('#custom-loading');
-        const bar = document.querySelector('.progress-bar');
-
-        // 當 MindAR 準備就緒 (相機開啟，系統Ready)
-        scene.addEventListener('arReady', () => {
-          // 進度條跑滿
-          bar.style.width = '100%';
-          bar.style.animation = 'none'; // 停止動畫直接設為滿
-          
-          // 稍微延遲一下讓使用者看到滿條，然後淡出
-          setTimeout(() => {
-            loader.style.opacity = '0';
-            setTimeout(() => {
-              loader.style.display = 'none';
-            }, 500);
-          }, 500);
-        });
-      });
-
-      // --- 2. 手勢偵測 (Gesture Detector) ---
+      // --- 1. 手勢偵測 (Gesture Detector) ---
+      // 負責監聽螢幕觸控事件
       AFRAME.registerComponent("gesture-detector", {
         schema: { element: { default: "" } },
         init: function() {
@@ -149,7 +75,8 @@
         }
       });
 
-      // --- 3. 手勢操作 (Gesture Handler) - 修正旋轉手感 ---
+      // --- 2. 手勢操作 (Gesture Handler) ---
+      // 支援 X/Y 軸旋轉與縮放
       AFRAME.registerComponent("gesture-handler", {
         schema: {
           enabled: { default: true },
@@ -164,11 +91,6 @@
           this.initialScale = this.el.object3D.scale.clone();
           this.scaleFactor = 1;
 
-          // 關鍵修正：設定旋轉順序為 YXZ
-          // 這會讓 Y 軸(水平旋轉)先執行，X 軸(俯仰)後執行，
-          // 避免在旋轉 90 度後 X 軸操作感覺像 Z 軸搖擺的問題。
-          this.el.object3D.rotation.order = 'YXZ';
-
           this.el.sceneEl.addEventListener("gesture-move", this.handleRotation);
           this.el.sceneEl.addEventListener("gesture-move", this.handleScale);
         },
@@ -177,21 +99,26 @@
           this.el.sceneEl.removeEventListener("gesture-move", this.handleScale);
         },
         handleRotation: function(event) {
-          if (event.detail.spreadChange) { return; } 
+          if (event.detail.spreadChange) { return; } // 雙指縮放時不旋轉
+          
+          // 如果模型不可見(例如Target丟失)，則不進行操作
           if (this.el.object3D.visible === false) return;
 
-          // X 軸旋轉 (手指上下滑動 - 俯仰)
+          // X 軸旋轉 (手指上下滑動)
           this.el.object3D.rotation.x += event.detail.positionChange.y * this.data.rotationFactor * 0.005;
           
-          // Y 軸旋轉 (手指左右滑動 - 水平)
+          // Y 軸旋轉 (手指左右滑動)
           this.el.object3D.rotation.y += event.detail.positionChange.x * this.data.rotationFactor * 0.005;
         },
         handleScale: function(event) {
           if (event.detail.spreadChange) {
+            // 如果模型不可見，則不進行操作
             if (this.el.object3D.visible === false) return;
+
             const spreadChange = event.detail.spreadChange;
             this.scaleFactor *= 1 + (spreadChange / this.el.sceneEl.canvas.clientWidth) * 2; 
             this.scaleFactor = Math.min(Math.max(this.scaleFactor, this.data.minScale), this.data.maxScale);
+            
             this.el.object3D.scale.x = this.scaleFactor * this.initialScale.x;
             this.el.object3D.scale.y = this.scaleFactor * this.initialScale.y;
             this.el.object3D.scale.z = this.scaleFactor * this.initialScale.z;
@@ -202,23 +129,13 @@
   </head>
   
   <body>
-    <!-- 客製化 Loading 介面 -->
-    <div id="custom-loading">
-      <div class="loading-text">rniko 特製A賞特典</div>
-      <div class="progress-container">
-        <div class="progress-bar"></div>
-      </div>
-    </div>
-
     <!-- 
       設定：
-      uiScanning: no (移除預設掃描框)
-      uiLoading: no (移除預設 Loading)
-      loading-screen="enabled: false" (移除 A-Frame 預設 Loading)
+      uiScanning: no (不顯示掃描框，純淨畫面)
+      filterMinCF, filterBeta (防抖動)
     -->
     <a-scene 
-      mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.001; uiScanning: no; uiLoading: no;" 
-      loading-screen="enabled: false"
+      mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.001; uiScanning: no;" 
       color-space="sRGB" 
       renderer="colorManagement: true, physicallyCorrectLights" 
       vr-mode-ui="enabled: false" 
@@ -231,9 +148,14 @@
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
+      <!-- 燈光：確保模型可見 -->
       <a-light type="ambient" intensity="1"></a-light>
       <a-light type="directional" position="1 1 1" intensity="1.5"></a-light>
 
+      <!-- 
+        標準 MindAR 結構：模型放在 Target 內部
+        這是最穩定的辨識方式
+      -->
       <a-entity mindar-image-target="targetIndex: 0">
         <a-gltf-model 
           id="avatar-model"
