@@ -2,12 +2,31 @@
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Titan AR Card - Interactive</title>
+    <title>Titan AR Card - Ultimate Version</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     
+    <style>
+      body { margin: 0; }
+      /* iOS Safari 關鍵修復：強制影片與畫布的層級，避免黑屏或轉圈 */
+      video {
+        position: absolute;
+        top: 0; left: 0;
+        z-index: -2 !important;
+        width: 100% !important; height: 100% !important;
+        object-fit: cover;
+      }
+      .a-canvas {
+        z-index: 1 !important; 
+        position: absolute !important;
+        top: 0; left: 0;
+      }
+      /* 隱藏 VR 按鈕 */
+      .a-enter-vr-button { display: none; }
+    </style>
+
     <script>
-      // 註冊手勢偵測元件
+      // === 1. 手勢偵測 (無需修改，標準版) ===
       AFRAME.registerComponent("gesture-detector", {
         schema: { element: { default: "" } },
         init: function() {
@@ -35,7 +54,6 @@
           if (gestureContinues) {
             const detail = {
               positionChange: { x: currentState.position.x - previousState.position.x, y: currentState.position.y - previousState.position.y },
-              scrollChange: { x: currentState.scroll.x - previousState.scroll.x, y: currentState.scroll.y - previousState.scroll.y },
               spreadChange: currentState.spread - previousState.spread,
               startSpread: currentState.startSpread,
               position: currentState.position
@@ -52,25 +70,23 @@
           const centerPositionRawX = touchList.reduce((sum, touch) => sum + touch.clientX, 0) / touchList.length;
           const centerPositionRawY = touchList.reduce((sum, touch) => sum + touch.clientY, 0) / touchList.length;
           touchState.position = { x: centerPositionRawX, y: centerPositionRawY };
-          touchState.scroll = { x: 0, y: 0 }; 
           touchState.spread = touchList.length > 1 ? Math.hypot(touchList[0].clientX - touchList[1].clientX, touchList[0].clientY - touchList[1].clientY) : 0;
           touchState.startSpread = this.internalState.previousState ? this.internalState.previousState.startSpread : touchState.spread;
           return touchState;
         }
       });
 
-      // 註冊手勢操作元件 (旋轉與縮放)
+      // === 2. 手勢操作升級版 (支援 X/Y 軸旋轉 + 縮放) ===
       AFRAME.registerComponent("gesture-handler", {
         schema: {
           enabled: { default: true },
-          rotationFactor: { default: 5 }, // 旋轉靈敏度
-          minScale: { default: 0.1 },     // 最小縮放倍率
-          maxScale: { default: 2.0 },     // 最大縮放倍率
+          rotationFactor: { default: 5 },
+          minScale: { default: 0.1 },
+          maxScale: { default: 3.0 },
         },
         init: function() {
           this.handleScale = this.handleScale.bind(this);
           this.handleRotation = this.handleRotation.bind(this);
-          this.isVisible = false;
           this.initialScale = this.el.object3D.scale.clone();
           this.scaleFactor = 1;
           this.el.sceneEl.addEventListener("gesture-move", this.handleRotation);
@@ -81,8 +97,13 @@
           this.el.sceneEl.removeEventListener("gesture-move", this.handleScale);
         },
         handleRotation: function(event) {
-          if (event.detail.spreadChange) { return; } // 如果是雙指縮放動作，就不旋轉
+          if (event.detail.spreadChange) { return; } // 雙指縮放時不旋轉
+          
+          // X 軸移動 -> Y 軸旋轉 (左右轉)
           this.el.object3D.rotation.y += event.detail.positionChange.x * this.data.rotationFactor * 2 * Math.PI / 1000;
+          
+          // Y 軸移動 -> X 軸旋轉 (上下轉)
+          this.el.object3D.rotation.x += event.detail.positionChange.y * this.data.rotationFactor * 2 * Math.PI / 1000;
         },
         handleScale: function(event) {
           if (event.detail.spreadChange) {
@@ -95,12 +116,52 @@
           }
         }
       });
+
+      // === 3. 模型持久化與同步器 (Persistence Logic) ===
+      AFRAME.registerComponent("content-synchronizer", {
+        schema: {
+          target: { type: 'selector' }, // 追蹤目標 (卡片)
+          model: { type: 'selector' }   // 顯示模型 (巨人)
+        },
+        init: function () {
+          this.targetFound = false;
+          
+          // 監聽卡片找到事件
+          this.data.target.addEventListener("targetFound", () => {
+            console.log("Target Found: Syncing model...");
+            this.targetFound = true;
+            // 第一次找到時，讓模型現身
+            this.data.model.setAttribute("visible", true);
+          });
+
+          // 監聽卡片遺失事件
+          this.data.target.addEventListener("targetLost", () => {
+            console.log("Target Lost: Model persisiting...");
+            this.targetFound = false;
+            // 關鍵：這裡「不」隱藏模型，讓它留在原地
+          });
+        },
+        tick: function () {
+          // 只有在「卡片被追蹤中」的時候，才把模型的位置鎖定在卡片上
+          if (this.targetFound && this.data.model && this.data.target) {
+            // 同步位置與旋轉
+            const targetObject = this.data.target.object3D;
+            const modelObject = this.data.model.object3D;
+            
+            // 將卡片的世界座標複製給模型
+            modelObject.position.copy(targetObject.position);
+            modelObject.quaternion.copy(targetObject.quaternion);
+            
+            // 注意：我們不同步 Scale，因為使用者可能正在用手指縮放它
+          }
+        }
+      });
     </script>
   </head>
   
   <body>
     <a-scene 
-      mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.001;" 
+      mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.001; uiLoading: yes; uiScanning: yes;" 
       color-space="sRGB" 
       renderer="colorManagement: true, physicallyCorrectLights" 
       vr-mode-ui="enabled: false" 
@@ -113,19 +174,28 @@
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <a-entity mindar-image-target="targetIndex: 0">
+      <a-entity 
+        id="image-target" 
+        mindar-image-target="targetIndex: 0"
+        content-synchronizer="target: #image-target; model: #avatar-container">
+      </a-entity>
+
+      <a-entity 
+        id="avatar-container" 
+        visible="false" 
+        class="clickable" 
+        gesture-handler>
         
         <a-gltf-model 
           src="#avatarModel" 
           position="0 0 0" 
           rotation="0 0 0" 
-          scale="0.5 0.5 0.5"
-          class="clickable"
-          gesture-handler
-          animation="property: rotation; from: 0 0 0; to: 0 360 0; loop: true; dur: 10000; easing: linear; isRawProperty: true; enabled: false"> 
-          </a-gltf-model>
+          scale="0.5 0.5 0.5" 
+          animation="property: rotation; from: 0 0 0; to: 0 360 0; loop: true; dur: 10000; easing: linear; enabled: false">
+        </a-gltf-model>
 
       </a-entity>
+
     </a-scene>
   </body>
 </html>
