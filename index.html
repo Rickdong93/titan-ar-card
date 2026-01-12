@@ -2,44 +2,39 @@
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Titan AR Card - Fixed</title>
+    <title>Titan AR Card - Camera Fix</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     
     <style>
-      /* === 修正重點 1: 完美全螢幕 (解決右側白條) === */
+      /* === 修正重點：移除黑色背景，確保透明 === */
       html, body {
         margin: 0;
         padding: 0;
         width: 100%;
         height: 100%;
-        overflow: hidden; /* 禁止捲動，防止出現白邊 */
-        background-color: black; /* 預防任何縫隙出現白色 */
+        overflow: hidden;
+        background: transparent !important; /* 關鍵：透明 */
       }
       
-      /* 強制視訊滿版 */
+      /* 強制相機視訊在最底層，且不變形 */
       video {
         position: absolute;
         top: 0;
         left: 0;
         z-index: -2 !important;
-        width: 100vw !important;
-        height: 100vh !important;
-        object-fit: cover !important;
+        min-width: 100%;
+        min-height: 100%;
+        object-fit: cover;
       }
 
-      /* 修正 Canvas 層級 */
+      /* 確保 AR 畫布在相機之上 */
       .a-canvas {
-        width: 100% !important;
-        height: 100% !important;
-        position: absolute !important;
+        z-index: 1 !important;
+        position: absolute;
         top: 0;
         left: 0;
-        z-index: 1 !important;
       }
-      
-      /* 隱藏 VR 按鈕 */
-      .a-enter-vr-button { display: none; }
     </style>
 
     <script>
@@ -93,7 +88,7 @@
         }
       });
 
-      // === 2. 手勢操作器 (Gesture Handler) - 支援 X/Y 軸旋轉與縮放 ===
+      // === 2. 手勢操作 (Gesture Handler) ===
       AFRAME.registerComponent("gesture-handler", {
         schema: {
           enabled: { default: true },
@@ -114,10 +109,8 @@
           this.el.sceneEl.removeEventListener("gesture-move", this.handleScale);
         },
         handleRotation: function(event) {
-          if (event.detail.spreadChange) { return; } 
-          // 左右滑動 -> Y 軸轉
+          if (event.detail.spreadChange) { return; }
           this.el.object3D.rotation.y += event.detail.positionChange.x * this.data.rotationFactor * 2 * Math.PI / 1000;
-          // 上下滑動 -> X 軸轉
           this.el.object3D.rotation.x += event.detail.positionChange.y * this.data.rotationFactor * 2 * Math.PI / 1000;
         },
         handleScale: function(event) {
@@ -132,7 +125,7 @@
         }
       });
 
-      // === 3. 穩定版模型同步器 (Stable Synchronizer) ===
+      // === 3. 簡單同步器 (Simple Sync - 持久化邏輯) ===
       AFRAME.registerComponent("simple-sync", {
         schema: {
           target: { type: 'selector' },
@@ -140,23 +133,18 @@
         },
         init: function () {
           this.isTracking = false;
-          
-          // 找到卡片時
+          // 找到卡片：顯示模型，標記為追蹤中
           this.data.target.addEventListener("targetFound", () => {
             this.isTracking = true;
-            // 只要找到一次，就永久顯示
             this.data.model.setAttribute("visible", true);
           });
-
-          // 丟失卡片時
+          // 丟失卡片：停止追蹤更新位置，但模型保持 visible (持久化)
           this.data.target.addEventListener("targetLost", () => {
             this.isTracking = false;
-            // 這裡不做任何事，保持 visible=true (達成持久化)
           });
         },
         tick: function () {
-          // 只有在「當下正在追蹤」時，才更新位置
-          // 這樣卡片移開後，模型會停留在「最後一次看到卡片」的位置
+          // 只有當「卡片正在被追蹤」時，才把模型的位置吸附過去
           if (this.isTracking && this.data.target && this.data.model) {
             const targetObj = this.data.target.object3D;
             const modelObj = this.data.model.object3D;
@@ -172,7 +160,7 @@
     <a-scene 
       mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.001; uiLoading: yes; uiScanning: yes;" 
       color-space="sRGB" 
-      renderer="colorManagement: true, physicallyCorrectLights" 
+      renderer="colorManagement: true, physicallyCorrectLights; alpha: true" 
       vr-mode-ui="enabled: false" 
       device-orientation-permission-ui="enabled: false"
       gesture-detector>
