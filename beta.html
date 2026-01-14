@@ -144,7 +144,10 @@
           // 1. 播放音樂 (iOS 需要此點擊事件來解鎖 Audio)
           if(bgm) { 
             bgm.volume = 0.5; // 音量 50%
-            bgm.play().catch(e => console.log("Audio play failed:", e));
+            // 嘗試播放，如果沒有檔案(catch)則忽略錯誤，不播放
+            bgm.play().catch(e => {
+              console.log("No BGM found or auto-play prevented. (Silent Mode)");
+            });
           }
 
           // 2. 淡出 Loading 畫面
@@ -160,10 +163,12 @@
         const model = document.querySelector('#avatar-model');
 
         target.addEventListener('targetFound', () => {
-          // 播放登場音效
+          // 播放登場音效 (如果有檔案)
           if(sfx) {
              sfx.currentTime = 0;
-             sfx.play().catch(e => console.log("SFX play failed:", e));
+             sfx.play().catch(e => {
+               // 靜默失敗：沒有檔案就不播
+             });
           }
           
           // 重置並播放登場動畫 (彈出效果)
@@ -315,8 +320,15 @@
         <a-asset-item id="avatarModel" src="./titan_model.glb"></a-asset-item>
         
         <!-- 音效資源 -->
-        <audio id="bgm-audio" src="https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3" loop="true" preload="auto"></audio>
-        <audio id="sfx-spawn" src="https://cdn.pixabay.com/audio/2022/03/10/audio_c8c8a73467.mp3" preload="auto"></audio>
+        <!-- 
+          已移除外部 CDN 連結，改為讀取本地檔案。
+          如果您要播放音樂，請上傳:
+          1. bgm.mp3 (背景音樂)
+          2. spawn.mp3 (登場音效)
+          如果沒有這些檔案，網頁將自動靜音，不會報錯。
+        -->
+        <audio id="bgm-audio" src="./bgm.mp3" loop="true" preload="auto"></audio>
+        <audio id="sfx-spawn" src="./spawn.mp3" preload="auto"></audio>
       </a-assets>
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
