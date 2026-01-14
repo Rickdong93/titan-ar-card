@@ -3,7 +3,6 @@
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <!-- 標題會顯示在瀏覽器分頁，但在手機全螢幕模式下看不到 -->
     <title>rniko 特製A賞特典</title>
     
     <!-- 1. 核心庫 -->
@@ -16,9 +15,8 @@
         margin: 0;
         overflow: hidden;
         font-family: 'Microsoft JhengHei', sans-serif;
-        background-color: black; /* 預設黑底避免白屏閃爍 */
-        /* 禁止 iOS 預設畫面滑動 */
-        touch-action: none; 
+        background-color: black;
+        touch-action: none; /* iOS 防滑動 */
       }
 
       /* --- 客製化 Loading 畫面 --- */
@@ -31,24 +29,47 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        transition: opacity 0.5s ease-out;
+        transition: opacity 0.8s ease-out;
       }
       
+      /* GIF 容器 */
+      .loading-gif-container {
+        width: 150px;
+        height: 150px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        /* 新增：淡白色背景，防止 GIF 是黑色透明底導致看不見 */
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 15px;
+        padding: 10px;
+      }
+      
+      .loading-gif-container img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain; /* 保持比例 */
+      }
+
       .loading-text {
         color: white;
         font-size: 20px;
         font-weight: bold;
-        margin-bottom: 20px;
+        margin-bottom: 30px;
         letter-spacing: 2px;
         text-align: center;
+        text-shadow: 0 0 10px rgba(255,255,255,0.5);
       }
 
-      .progress-container {
+      /* 進度條區域 */
+      .progress-wrapper {
         width: 200px;
         height: 6px;
         background: rgba(255, 255, 255, 0.2);
         border-radius: 3px;
         overflow: hidden;
+        position: relative;
       }
 
       .progress-bar {
@@ -56,46 +77,113 @@
         height: 100%;
         background: #fff;
         box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
-        animation: loadProgress 2.5s ease-in-out forwards;
+        transition: width 0.3s ease;
       }
 
-      @keyframes loadProgress {
-        0% { width: 0%; }
-        50% { width: 60%; }
-        80% { width: 80%; }
-        100% { width: 95%; } /* 最後 5% 等到 loaded 事件觸發時補滿 */
+      /* 開始按鈕 (預設隱藏，Loading 完顯示) */
+      #start-btn {
+        display: none;
+        margin-top: 20px;
+        padding: 12px 40px;
+        background: white;
+        color: black;
+        border: none;
+        border-radius: 30px;
+        font-size: 18px;
+        font-weight: bold;
+        cursor: pointer;
+        box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
+        animation: pulse 2s infinite;
       }
 
-      /* 隱藏 A-Frame 預設的 VR 按鈕 */
-      .a-enter-vr-button {
-        display: none !important;
+      @keyframes pulse {
+        0% { transform: scale(1); box-shadow: 0 0 10px rgba(255,255,255,0.5); }
+        50% { transform: scale(1.05); box-shadow: 0 0 20px rgba(255,255,255,0.8); }
+        100% { transform: scale(1); box-shadow: 0 0 10px rgba(255,255,255,0.5); }
       }
+
+      /* 隱藏 A-Frame 預設元件 */
+      .a-enter-vr-button, .a-loader-title { display: none !important; }
     </style>
 
     <script>
-      // --- 1. Loading 控制邏輯 ---
+      // --- 1. Loading 與 音效控制邏輯 ---
       document.addEventListener("DOMContentLoaded", function() {
         const scene = document.querySelector('a-scene');
         const loader = document.querySelector('#custom-loading');
-        const bar = document.querySelector('.progress-bar');
+        const progressBar = document.querySelector('.progress-bar');
+        const progressWrapper = document.querySelector('.progress-wrapper');
+        const startBtn = document.querySelector('#start-btn');
+        
+        // 音效元素
+        const bgm = document.querySelector('#bgm-audio');
+        
+        // 模擬 Loading 進度 (為了視覺效果)
+        let progress = 0;
+        const interval = setInterval(() => {
+          if (progress < 90) {
+            progress += Math.random() * 5;
+            progressBar.style.width = progress + '%';
+          }
+        }, 100);
 
-        // 當 MindAR 準備就緒 (相機開啟，系統Ready)
+        // 當 AR 系統準備就緒 (相機已開)
         scene.addEventListener('arReady', () => {
-          // 進度條跑滿
-          bar.style.width = '100%';
-          bar.style.animation = 'none'; // 停止動畫直接設為滿
+          clearInterval(interval);
+          progressBar.style.width = '100%';
           
-          // 稍微延遲一下讓使用者看到滿條，然後淡出
+          // 稍微延遲後，隱藏進度條，顯示開始按鈕
           setTimeout(() => {
-            loader.style.opacity = '0';
-            setTimeout(() => {
-              loader.style.display = 'none';
-            }, 500);
+            progressWrapper.style.display = 'none'; // 隱藏進度條
+            startBtn.style.display = 'block';     // 顯示開始按鈕
           }, 500);
+        });
+
+        // 點擊開始按鈕
+        startBtn.addEventListener('click', () => {
+          // 1. 播放音樂 (iOS 需要此點擊事件來解鎖 Audio)
+          if(bgm) { 
+            bgm.volume = 0.5; // 音量 50%
+            // 嘗試播放，如果沒有檔案(catch)則忽略錯誤，不播放
+            bgm.play().catch(e => {
+              console.log("No BGM found or auto-play prevented. (Silent Mode)");
+            });
+          }
+
+          // 2. 淡出 Loading 畫面
+          loader.style.opacity = '0';
+          setTimeout(() => {
+            loader.style.display = 'none';
+          }, 800);
+        });
+
+        // --- 2. 辨識成功時的邏輯 (播放音效 + 動畫) ---
+        const target = document.querySelector('#my-image-target');
+        const sfx = document.querySelector('#sfx-spawn');
+        const model = document.querySelector('#avatar-model');
+
+        target.addEventListener('targetFound', () => {
+          // 播放登場音效 (如果有檔案)
+          if(sfx) {
+             sfx.currentTime = 0;
+             sfx.play().catch(e => {
+               // 靜默失敗：沒有檔案就不播
+             });
+          }
+          
+          // 重置並播放登場動畫 (彈出效果)
+          model.removeAttribute('animation__spawn');
+          model.setAttribute('animation__spawn', {
+            property: 'scale',
+            from: '0 0 0',
+            to: '0.5 0.5 0.5', // 對應原本設定的大小
+            dur: 800,
+            easing: 'easeOutElastic'
+          });
         });
       });
 
-      // --- 2. 手勢偵測 (Gesture Detector) ---
+      // --- 3. 手勢偵測 (Gesture Detector) ---
       AFRAME.registerComponent("gesture-detector", {
         schema: { element: { default: "" } },
         init: function() {
@@ -149,7 +237,7 @@
         }
       });
 
-      // --- 3. 手勢操作 (Gesture Handler) - 修正旋轉手感 ---
+      // --- 4. 手勢操作 (Gesture Handler) - YXZ 順序優化版 ---
       AFRAME.registerComponent("gesture-handler", {
         schema: {
           enabled: { default: true },
@@ -160,14 +248,9 @@
         init: function() {
           this.handleScale = this.handleScale.bind(this);
           this.handleRotation = this.handleRotation.bind(this);
-          
           this.initialScale = this.el.object3D.scale.clone();
           this.scaleFactor = 1;
-
-          // 關鍵修正：設定旋轉順序為 YXZ
-          // 這會讓 Y 軸(水平旋轉)先執行，X 軸(俯仰)後執行，
-          // 避免在旋轉 90 度後 X 軸操作感覺像 Z 軸搖擺的問題。
-          this.el.object3D.rotation.order = 'YXZ';
+          this.el.object3D.rotation.order = 'YXZ'; 
 
           this.el.sceneEl.addEventListener("gesture-move", this.handleRotation);
           this.el.sceneEl.addEventListener("gesture-move", this.handleScale);
@@ -180,10 +263,7 @@
           if (event.detail.spreadChange) { return; } 
           if (this.el.object3D.visible === false) return;
 
-          // X 軸旋轉 (手指上下滑動 - 俯仰)
           this.el.object3D.rotation.x += event.detail.positionChange.y * this.data.rotationFactor * 0.005;
-          
-          // Y 軸旋轉 (手指左右滑動 - 水平)
           this.el.object3D.rotation.y += event.detail.positionChange.x * this.data.rotationFactor * 0.005;
         },
         handleScale: function(event) {
@@ -202,20 +282,31 @@
   </head>
   
   <body>
-    <!-- 客製化 Loading 介面 -->
+    <!-- 1. 客製化 Loading 介面 -->
     <div id="custom-loading">
+      
+      <!-- GIF 區域 -->
+      <div class="loading-gif-container">
+        <!-- 
+          修正重點：
+          1. onerror: 如果找不到 ./loading.gif，會自動換成貓咪 GIF。
+          這能幫您確認是否為檔案上傳/路徑問題。
+        -->
+        <img src="./loading.gif" alt="Loading Animation" onerror="this.onerror=null; this.src='https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3pueXAxZnl4Y3R6Y3I4Z3R6Y3I4Z3R6eSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9cw/L0ZnJk3x7yT8G2yqX/giphy.gif';">
+      </div>
+
       <div class="loading-text">rniko 特製A賞特典</div>
-      <div class="progress-container">
+      
+      <!-- 進度條 -->
+      <div class="progress-wrapper">
         <div class="progress-bar"></div>
       </div>
+
+      <!-- 開始按鈕 -->
+      <button id="start-btn">開始體驗</button>
     </div>
 
-    <!-- 
-      設定：
-      uiScanning: no (移除預設掃描框)
-      uiLoading: no (移除預設 Loading)
-      loading-screen="enabled: false" (移除 A-Frame 預設 Loading)
-    -->
+    <!-- 2. AR 場景 -->
     <a-scene 
       mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.001; uiScanning: no; uiLoading: no;" 
       loading-screen="enabled: false"
@@ -227,6 +318,17 @@
       
       <a-assets>
         <a-asset-item id="avatarModel" src="./titan_model.glb"></a-asset-item>
+        
+        <!-- 音效資源 -->
+        <!-- 
+          已移除外部 CDN 連結，改為讀取本地檔案。
+          如果您要播放音樂，請上傳:
+          1. bgm.mp3 (背景音樂)
+          2. spawn.mp3 (登場音效)
+          如果沒有這些檔案，網頁將自動靜音，不會報錯。
+        -->
+        <audio id="bgm-audio" src="./bgm.mp3" loop="true" preload="auto"></audio>
+        <audio id="sfx-spawn" src="./spawn.mp3" preload="auto"></audio>
       </a-assets>
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
@@ -234,7 +336,7 @@
       <a-light type="ambient" intensity="1"></a-light>
       <a-light type="directional" position="1 1 1" intensity="1.5"></a-light>
 
-      <a-entity mindar-image-target="targetIndex: 0">
+      <a-entity mindar-image-target="targetIndex: 0" id="my-image-target">
         <a-gltf-model 
           id="avatar-model"
           src="#avatarModel" 
