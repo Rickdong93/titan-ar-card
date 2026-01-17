@@ -98,42 +98,39 @@
         100% { transform: scale(1); box-shadow: 0 0 10px rgba(255,255,255,0.5); }
       }
 
-      /* --- 2. 掃描對焦框 UI (新增) --- */
+      /* --- 2. 掃描對焦框 UI --- */
       #scan-overlay {
         position: fixed;
         top: 0; left: 0; width: 100%; height: 100%;
-        z-index: 100; /* 比 Loading 低，但比 Canvas 高 */
-        pointer-events: none; /* 讓點擊穿透，不影響手勢 */
+        z-index: 100;
+        pointer-events: none;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        transition: opacity 0.5s ease; /* 淡出動畫 */
-        opacity: 0; /* 預設隱藏，等 Loading 結束再顯示 */
+        transition: opacity 0.5s ease;
+        opacity: 0; 
       }
 
-      /* 當辨識成功時，加上 hidden class 來隱藏 */
       #scan-overlay.hidden {
         opacity: 0 !important;
       }
 
-      /* 顯示狀態 */
       #scan-overlay.visible {
         opacity: 1;
       }
 
       .scan-reticle {
-        width: 60vw;  /* 寬度佔螢幕 60% */
-        height: 60vw; /* 正方形 */
+        width: 60vw;
+        height: 60vw;
         max-width: 300px;
         max-height: 300px;
-        border: 2px dashed rgba(255, 255, 255, 0.5); /* 半透明虛線 */
+        border: 2px dashed rgba(255, 255, 255, 0.5);
         border-radius: 20px;
-        box-shadow: 0 0 20px rgba(0, 0, 0, 0.3); /* 輕微陰影 */
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
         position: relative;
       }
 
-      /* 四個角落的裝飾 (可選，增加質感) */
       .scan-reticle::before, .scan-reticle::after {
         content: ''; position: absolute; width: 20px; height: 20px;
         border-color: white; border-style: solid;
@@ -169,7 +166,7 @@
         const progressBar = document.querySelector('.progress-bar');
         const progressWrapper = document.querySelector('.progress-wrapper');
         const startBtn = document.querySelector('#start-btn');
-        const scanOverlay = document.querySelector('#scan-overlay'); // 掃描框
+        const scanOverlay = document.querySelector('#scan-overlay'); 
         
         const bgm = document.querySelector('#bgm-audio');
         const sfx = document.querySelector('#sfx-spawn');
@@ -211,39 +208,51 @@
           }, 800);
         });
 
-        // --- Target Events (控制掃描框與特效) ---
-        const target = document.querySelector('#my-image-target');
-        const model = document.querySelector('#avatar-model');
+        // --- 多重 Target 監聽邏輯 ---
+        const targets = document.querySelectorAll('[mindar-image-target]');
+        let activeTargets = 0; // 追蹤目前有多少個目標被偵測到
 
-        target.addEventListener('targetFound', () => {
-          // 1. 隱藏掃描框
-          scanOverlay.classList.add('hidden');
+        targets.forEach(target => {
+          target.addEventListener('targetFound', () => {
+            activeTargets++;
+            // 只要有一個目標出現，就隱藏掃描框
+            if (activeTargets > 0) {
+              scanOverlay.classList.add('hidden');
+            }
 
-          // 2. 播放音效
-          if(sfx) {
-             sfx.currentTime = 0;
-             const sfxPromise = sfx.play();
-             if (sfxPromise !== undefined) { sfxPromise.catch(e => {}); }
-          }
-          
-          // 3. 播放登場動畫
-          model.removeAttribute('animation__spawn');
-          model.setAttribute('animation__spawn', {
-            property: 'scale',
-            from: '0 0 0',
-            to: '0.5 0.5 0.5', 
-            dur: 800,
-            easing: 'easeOutElastic'
+            // 播放音效
+            if(sfx) {
+               sfx.currentTime = 0;
+               const sfxPromise = sfx.play();
+               if (sfxPromise !== undefined) { sfxPromise.catch(e => {}); }
+            }
+            
+            // 找到該目標底下的模型並播放登場動畫
+            const model = target.querySelector('a-gltf-model');
+            if (model) {
+              model.removeAttribute('animation__spawn');
+              model.setAttribute('animation__spawn', {
+                property: 'scale',
+                from: '0 0 0',
+                to: '0.5 0.5 0.5', 
+                dur: 800,
+                easing: 'easeOutElastic'
+              });
+            }
           });
-        });
 
-        target.addEventListener('targetLost', () => {
-          // 顯示掃描框 (移除 hidden class)
-          scanOverlay.classList.remove('hidden');
+          target.addEventListener('targetLost', () => {
+            activeTargets--;
+            // 如果所有目標都消失了，才顯示掃描框
+            if (activeTargets <= 0) {
+              activeTargets = 0; // 防止負數
+              scanOverlay.classList.remove('hidden');
+            }
+          });
         });
       });
 
-      // --- 手勢組件 (維持不變) ---
+      // --- 手勢組件 ---
       AFRAME.registerComponent("gesture-detector", {
         schema: { element: { default: "" } },
         init: function() {
@@ -351,18 +360,16 @@
       <button id="start-btn">開始體驗</button>
     </div>
 
-    <!-- 2. 掃描對焦框 (新增) -->
+    <!-- 2. 掃描對焦框 -->
     <div id="scan-overlay">
       <div class="scan-reticle"></div>
       <div class="scan-prompt">請從特典卡牌找尋目標</div>
     </div>
 
-    <!-- 3. AR 場景 (啟用陰影) -->
-    <!-- shadow="type: pcfsoft" 開啟柔和陰影 -->
+    <!-- 3. AR 場景 (恢復正常光照，無陰影) -->
     <a-scene 
       mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.001; uiScanning: no; uiLoading: no;" 
       loading-screen="enabled: false"
-      shadow="type: pcfsoft"
       color-space="sRGB" 
       renderer="colorManagement: true, physicallyCorrectLights" 
       vr-mode-ui="enabled: false" 
@@ -371,42 +378,43 @@
       
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <a-light type="ambient" intensity="0.8"></a-light>
-      <!-- castShadow="true" 開啟光源投射陰影 -->
-      <a-light type="directional" position="2 4 2" intensity="1.5" castShadow="true" shadow-bias="-0.001"></a-light>
+      <a-light type="ambient" intensity="1"></a-light>
+      <a-light type="directional" position="1 1 1" intensity="1.5"></a-light>
 
-      <a-entity mindar-image-target="targetIndex: 0" id="my-image-target">
-        
-        <!-- 模型： shadow="cast: true" 產生影子 -->
+      <!-- 
+        Target A (Index 0) 
+        對應編譯時的第一張圖 -> titan_model_A.glb
+      -->
+      <a-entity mindar-image-target="targetIndex: 0" id="target-a">
         <a-gltf-model 
-          id="avatar-model"
-          src="./titan_model.glb" 
+          id="model-a"
+          src="./titan_model_A.glb" 
           position="0 0 0" 
           rotation="0 0 0" 
           scale="0.5 0.5 0.5" 
           class="clickable"
           animation-mixer="clip: *; loop: repeat;"
-          shadow="cast: true; receive: false"
           gesture-handler> 
         </a-gltf-model>
-        
-        <!-- 陰影平面 (新增) -->
-        <!-- 
-          這是一個放在模型腳下的透明平面。
-          shadow="receive: true" 讓它能顯示影子。
-          opacity="0.3" 讓它看起來像個淡淡的黑色底座，增加接地感。
-        -->
-        <a-plane 
-            position="0 -0.01 0" 
-            rotation="-90 0 0" 
-            width="3" height="3" 
-            color="#000" 
-            opacity="0.3" 
-            transparent="true" 
-            shadow="receive: true">
-        </a-plane>
-
       </a-entity>
+
+      <!-- 
+        Target B (Index 1) 
+        對應編譯時的第二張圖 -> titan_model_B.glb
+      -->
+      <a-entity mindar-image-target="targetIndex: 1" id="target-b">
+        <a-gltf-model 
+          id="model-b"
+          src="./titan_model_B.glb" 
+          position="0 0 0" 
+          rotation="0 0 0" 
+          scale="0.5 0.5 0.5" 
+          class="clickable"
+          animation-mixer="clip: *; loop: repeat;"
+          gesture-handler> 
+        </a-gltf-model>
+      </a-entity>
+
     </a-scene>
 
     <!-- 音效資源 -->
