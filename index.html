@@ -5,10 +5,9 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <title>rniko 特製A賞特典</title>
     
-    <!-- 1. 核心庫 (降回穩定版 1.4.2，解決 iOS Safari 卡頓問題) -->
+    <!-- 1. 核心庫 (維持穩定版組合) -->
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-    <!-- 配合 A-Frame 1.4.2 使用 Extras 6.1.1 -->
     <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
 
     <style>
@@ -20,7 +19,7 @@
         touch-action: none; /* iOS 防滑動 */
       }
 
-      /* --- Loading 畫面 --- */
+      /* --- 1. 客製化 Loading 畫面 --- */
       #custom-loading {
         position: fixed;
         top: 0; left: 0; width: 100%; height: 100%;
@@ -33,39 +32,77 @@
         transition: opacity 0.8s ease-out;
       }
       
+      /* GIF 容器設定 (修正版) */
       .loading-gif-container {
-        width: 150px; height: 150px; margin-bottom: 20px;
-        display: flex; align-items: center; justify-content: center;
+        /* 尺寸設定：
+           1. 高度佔螢幕 55%，確保變大。
+           2. 強制 9:16 比例，避免變形。
+        */
+        height: 55vh; 
+        aspect-ratio: 9/16; 
+        max-width: 90vw; /* 防止超出手機寬度 */
+        margin-bottom: 20px;
+        
+        display: flex;
+        align-items: center;
+        justify-content: center;
         background-color: rgba(255, 255, 255, 0.05);
-        border-radius: 15px; padding: 10px;
+        border-radius: 15px;
+        padding: 10px;
+
+        /* 層級設定：確保在最底層 */
+        position: relative;
+        z-index: 0;
       }
       
       .loading-gif-container img {
-        width: 100%; height: 100%; object-fit: contain;
+        width: 100%;
+        height: 100%;
+        object-fit: contain; /* 完整顯示內容 */
+      }
+
+      /* UI 元素設定：確保層級高於 GIF */
+      .loading-text, .progress-wrapper, #start-btn {
+        position: relative;
+        z-index: 10; /* 比 GIF 高 */
       }
 
       .loading-text {
-        color: white; font-size: 20px; font-weight: bold;
-        margin-bottom: 30px; letter-spacing: 2px; text-align: center;
+        color: white;
+        font-size: 20px;
+        font-weight: bold;
+        margin-bottom: 20px;
+        letter-spacing: 2px;
+        text-align: center;
         text-shadow: 0 0 10px rgba(255,255,255,0.5);
       }
 
       .progress-wrapper {
-        width: 200px; height: 6px;
+        width: 200px;
+        height: 6px;
         background: rgba(255, 255, 255, 0.2);
-        border-radius: 3px; overflow: hidden; position: relative;
+        border-radius: 3px;
+        overflow: hidden;
       }
 
       .progress-bar {
-        width: 0%; height: 100%; background: #fff;
+        width: 0%;
+        height: 100%;
+        background: #fff;
         box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
         transition: width 0.3s ease;
       }
 
       #start-btn {
-        display: none; margin-top: 20px; padding: 12px 40px;
-        background: white; color: black; border: none;
-        border-radius: 30px; font-size: 18px; font-weight: bold;
+        display: none;
+        margin-top: 20px;
+        padding: 12px 40px;
+        background: white;
+        color: black;
+        border: none;
+        border-radius: 30px;
+        font-size: 18px;
+        font-weight: bold;
         cursor: pointer;
         box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
         animation: pulse 2s infinite;
@@ -77,21 +114,33 @@
         100% { transform: scale(1); box-shadow: 0 0 10px rgba(255,255,255,0.5); }
       }
 
-      /* --- 掃描對焦框 UI --- */
+      /* --- 2. 掃描對焦框 UI --- */
       #scan-overlay {
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        z-index: 100; pointer-events: none;
-        display: flex; flex-direction: column;
-        align-items: center; justify-content: center;
-        transition: opacity 0.5s ease; opacity: 0; 
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        z-index: 100;
+        pointer-events: none;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        transition: opacity 0.5s ease;
+        opacity: 0; 
       }
 
-      #scan-overlay.hidden { opacity: 0 !important; }
-      #scan-overlay.visible { opacity: 1; }
+      #scan-overlay.hidden {
+        opacity: 0 !important;
+      }
+
+      #scan-overlay.visible {
+        opacity: 1;
+      }
 
       .scan-reticle {
-        width: 60vw; height: 60vw;
-        max-width: 300px; max-height: 300px;
+        width: 60vw;
+        height: 60vw;
+        max-width: 300px;
+        max-height: 300px;
         border: 2px dashed rgba(255, 255, 255, 0.5);
         border-radius: 20px;
         box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
@@ -100,20 +149,28 @@
 
       .scan-reticle::before, .scan-reticle::after {
         content: ''; position: absolute; width: 20px; height: 20px;
-        border-color: white; border-style: solid; opacity: 0.8;
+        border-color: white; border-style: solid;
+        opacity: 0.8;
       }
       .scan-reticle::before {
-        top: -2px; left: -2px; border-width: 4px 0 0 4px; border-radius: 4px 0 0 0;
+        top: -2px; left: -2px; border-width: 4px 0 0 4px;
+        border-radius: 4px 0 0 0;
       }
       .scan-reticle::after {
-        bottom: -2px; right: -2px; border-width: 0 4px 4px 0; border-radius: 0 0 4px 0;
+        bottom: -2px; right: -2px; border-width: 0 4px 4px 0;
+        border-radius: 0 0 4px 0;
       }
 
+      /* 加強文字背景以利色盲辨識 */
       .scan-prompt {
-        margin-top: 15px; color: rgba(255, 255, 255, 0.8);
-        font-size: 14px; letter-spacing: 1px;
+        margin-top: 15px;
+        color: rgba(255, 255, 255, 0.9);
+        font-size: 14px;
+        letter-spacing: 1px;
         text-shadow: 0 0 5px black;
-        background: rgba(0,0,0,0.3); padding: 5px 12px; border-radius: 15px;
+        background: rgba(0,0,0,0.6); /* 加深背景 */
+        padding: 8px 16px;
+        border-radius: 20px;
       }
 
       .a-enter-vr-button, .a-loader-title { display: none !important; }
@@ -163,14 +220,14 @@
           loader.style.opacity = '0';
           setTimeout(() => {
             loader.style.display = 'none';
+            // 顯示掃描框
             scanOverlay.classList.add('visible');
           }, 800);
         });
 
-        // --- 多重 Target 監聽邏輯 (修正版) ---
-        // 監聽所有設定了 mindar-image-target 的實體
+        // --- 多重 Target 監聽邏輯 (3個目標) ---
         const targets = document.querySelectorAll('[mindar-image-target]');
-        let activeTargets = 0; 
+        let activeTargets = 0; // 追蹤目前有多少個目標被偵測到
 
         targets.forEach(target => {
           target.addEventListener('targetFound', () => {
@@ -186,12 +243,11 @@
                if (sfxPromise !== undefined) { sfxPromise.catch(e => {}); }
             }
             
-            // 播放登場動畫 (針對個別模型)
+            // 找到該目標底下的模型並播放登場動畫
             const model = target.querySelector('a-gltf-model');
             if (model) {
-              // 重置 scale
+              // 重置 scale 確保動畫每次都播放
               model.setAttribute('scale', '0 0 0');
-              // 重新觸發動畫
               model.removeAttribute('animation__spawn');
               model.setAttribute('animation__spawn', {
                 property: 'scale',
@@ -328,10 +384,9 @@
       <div class="scan-prompt">請從特典卡牌找尋目標</div>
     </div>
 
-    <!-- 3. AR 場景 (使用 A-Frame 1.4.2 穩定版) -->
+    <!-- 3. AR 場景 (恢復正常光照，無陰影) -->
     <!-- 
-      注意：imageTargetSrc 必須指向一個編譯好的 .mind 檔案。
-      您需要將 targetA 和 targetB 編譯成同一個 targets.mind。
+       imageTargetSrc: ./targets.mind (必須包含3張圖片)
     -->
     <a-scene 
       mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.001; uiScanning: no; uiLoading: no;" 
@@ -347,9 +402,7 @@
       <a-light type="ambient" intensity="1"></a-light>
       <a-light type="directional" position="1 1 1" intensity="1.5"></a-light>
 
-      <!-- 
-        Target A (Index 0) -> titan_model_A.glb
-      -->
+      <!-- Target A (Index 0) -> titan_model_A.glb -->
       <a-entity mindar-image-target="targetIndex: 0" id="target-a">
         <a-gltf-model 
           id="model-a"
@@ -363,13 +416,25 @@
         </a-gltf-model>
       </a-entity>
 
-      <!-- 
-        Target B (Index 1) -> titan_model_B.glb
-      -->
+      <!-- Target B (Index 1) -> titan_model_B.glb -->
       <a-entity mindar-image-target="targetIndex: 1" id="target-b">
         <a-gltf-model 
           id="model-b"
           src="./titan_model_B.glb" 
+          position="0 0 0" 
+          rotation="0 0 0" 
+          scale="0.5 0.5 0.5" 
+          class="clickable"
+          animation-mixer="clip: *; loop: repeat;"
+          gesture-handler> 
+        </a-gltf-model>
+      </a-entity>
+
+      <!-- Target C (Index 2) -> titan_model_C.glb (新增) -->
+      <a-entity mindar-image-target="targetIndex: 2" id="target-c">
+        <a-gltf-model 
+          id="model-c"
+          src="./titan_model_C.glb" 
           position="0 0 0" 
           rotation="0 0 0" 
           scale="0.5 0.5 0.5" 
