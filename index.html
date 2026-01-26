@@ -5,249 +5,227 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <title>rniko 特製A賞特典</title>
     
-    <!-- 1. 核心庫 (維持穩定版組合) -->
+    <!-- 1. 核心庫 (維持 A-Frame 1.4.2 穩定版) -->
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
 
     <style>
       body {
-        margin: 0;
-        overflow: hidden;
+        margin: 0; overflow: hidden;
         font-family: 'Microsoft JhengHei', sans-serif;
-        background-color: black;
-        touch-action: none; /* iOS 防滑動 */
+        background-color: black; touch-action: none;
       }
 
-      /* --- 1. 客製化 Loading 畫面 --- */
+      /* --- Loading 畫面 --- */
       #custom-loading {
-        position: fixed;
-        top: 0; left: 0; width: 100%; height: 100%;
-        background: #000;
-        z-index: 99999;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: #000; z-index: 99999;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
         transition: opacity 0.8s ease-out;
       }
-      
-      /* GIF 容器設定 (修正版) */
       .loading-gif-container {
-        /* 尺寸設定：
-           1. 高度佔螢幕 55%，確保變大。
-           2. 強制 9:16 比例，避免變形。
-        */
-        height: 55vh; 
-        aspect-ratio: 9/16; 
-        max-width: 90vw; /* 防止超出手機寬度 */
-        margin-bottom: 20px;
-        
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background-color: rgba(255, 255, 255, 0.05);
-        border-radius: 15px;
-        padding: 10px;
-
-        /* 層級設定：確保在最底層 */
-        position: relative;
-        z-index: 0;
+        /* 尺寸加大至 70vh */
+        height: 70vh; aspect-ratio: 9/16; max-width: 95vw;
+        margin-bottom: 20px; display: flex; align-items: center; justify-content: center;
+        background-color: rgba(255, 255, 255, 0.05); border-radius: 15px; padding: 10px;
+        position: relative; z-index: 0;
       }
+      .loading-gif-container img { width: 100%; height: 100%; object-fit: contain; }
       
-      .loading-gif-container img {
-        width: 100%;
-        height: 100%;
-        object-fit: contain; /* 完整顯示內容 */
+      /* UI 層級設定 */
+      .loading-text, .progress-wrapper, #start-btn, .loading-subtext { 
+        position: relative; z-index: 10; 
       }
 
-      /* UI 元素設定：確保層級高於 GIF */
-      .loading-text, .progress-wrapper, #start-btn {
-        position: relative;
-        z-index: 10; /* 比 GIF 高 */
-      }
-
+      /* --- 標題文字特效 (可愛跳動版) --- */
       .loading-text {
-        color: white;
-        font-size: 20px;
-        font-weight: bold;
-        margin-bottom: 20px;
-        letter-spacing: 2px;
-        text-align: center;
-        text-shadow: 0 0 10px rgba(255,255,255,0.5);
+        color: white; font-size: 22px; font-weight: bold; margin-bottom: 15px;
+        letter-spacing: 2px; text-align: center;
+        /* 粉色系光暈，增加可愛感 */
+        text-shadow: 0 0 10px #ff9a9e, 0 0 20px #ff69b4;
+        /* 跳動動畫 */
+        animation: cuteBounce 1s infinite ease-in-out;
+      }
+      @keyframes cuteBounce {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-8px); } /* 輕微上跳 */
+      }
+
+      /* --- 底部補充說明文字 (修改處) --- */
+      .loading-subtext {
+        font-size: 12px; color: rgba(255, 255, 255, 0.6);
+        margin-top: 15px; letter-spacing: 1px; text-align: center;
+        line-height: 1.6; /* 增加行高，讓兩行文字不要黏太緊 */
       }
 
       .progress-wrapper {
-        width: 200px;
-        height: 6px;
-        background: rgba(255, 255, 255, 0.2);
-        border-radius: 3px;
-        overflow: hidden;
+        width: 200px; height: 6px; background: rgba(255, 255, 255, 0.2);
+        border-radius: 3px; overflow: hidden;
       }
-
       .progress-bar {
-        width: 0%;
-        height: 100%;
-        background: #fff;
-        box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
-        transition: width 0.3s ease;
+        width: 0%; height: 100%; background: #fff;
+        box-shadow: 0 0 10px rgba(255, 255, 255, 0.8); 
       }
-
       #start-btn {
-        display: none;
-        margin-top: 20px;
-        padding: 12px 40px;
-        background: white;
-        color: black;
-        border: none;
-        border-radius: 30px;
-        font-size: 18px;
-        font-weight: bold;
-        cursor: pointer;
-        box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
-        animation: pulse 2s infinite;
+        display: none; margin-top: 20px; padding: 12px 40px;
+        background: white; color: black; border: none; border-radius: 30px;
+        font-size: 18px; font-weight: bold; cursor: pointer;
+        box-shadow: 0 0 15px rgba(255, 255, 255, 0.5); animation: pulse 2s infinite;
       }
-
+      #error-msg {
+        display: none; color: #ff4444; margin-top: 15px; font-weight: bold; text-align: center;
+      }
       @keyframes pulse {
         0% { transform: scale(1); box-shadow: 0 0 10px rgba(255,255,255,0.5); }
         50% { transform: scale(1.05); box-shadow: 0 0 20px rgba(255,255,255,0.8); }
         100% { transform: scale(1); box-shadow: 0 0 10px rgba(255,255,255,0.5); }
       }
 
-      /* --- 2. 掃描對焦框 UI --- */
+      /* --- 掃描對焦框 UI --- */
       #scan-overlay {
-        position: fixed;
-        top: 0; left: 0; width: 100%; height: 100%;
-        z-index: 100;
-        pointer-events: none;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        transition: opacity 0.5s ease;
-        opacity: 0; 
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        z-index: 100; pointer-events: none;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        transition: opacity 0.5s ease; opacity: 0; 
       }
-
-      #scan-overlay.hidden {
-        opacity: 0 !important;
-      }
-
-      #scan-overlay.visible {
-        opacity: 1;
-      }
+      #scan-overlay.hidden { opacity: 0 !important; }
+      #scan-overlay.visible { opacity: 1; }
 
       .scan-reticle {
-        width: 60vw;
-        height: 60vw;
-        max-width: 300px;
-        max-height: 300px;
-        border: 2px dashed rgba(255, 255, 255, 0.5);
-        border-radius: 20px;
-        box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
-        position: relative;
+        width: 60vw; height: 60vw; max-width: 300px; max-height: 300px;
+        border: 2px dashed rgba(255, 255, 255, 0.5); border-radius: 20px;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.3); transition: all 0.3s ease;
       }
-
+      .scan-reticle.success-flash {
+        border-color: #ffd700; border-style: solid; border-width: 4px;
+        box-shadow: 0 0 30px #ffd700, inset 0 0 20px #ffd700;
+        animation: flashBorder 0.5s infinite alternate;
+      }
+      @keyframes flashBorder {
+        from { opacity: 1; transform: scale(1); }
+        to { opacity: 0.7; transform: scale(1.05); }
+      }
       .scan-reticle::before, .scan-reticle::after {
         content: ''; position: absolute; width: 20px; height: 20px;
-        border-color: white; border-style: solid;
-        opacity: 0.8;
+        border-color: white; border-style: solid; opacity: 0.8;
       }
-      .scan-reticle::before {
-        top: -2px; left: -2px; border-width: 4px 0 0 4px;
-        border-radius: 4px 0 0 0;
-      }
-      .scan-reticle::after {
-        bottom: -2px; right: -2px; border-width: 0 4px 4px 0;
-        border-radius: 0 0 4px 0;
+      .scan-reticle::before { top: -2px; left: -2px; border-width: 4px 0 0 4px; border-radius: 4px 0 0 0; }
+      .scan-reticle::after { bottom: -2px; right: -2px; border-width: 0 4px 4px 0; border-radius: 0 0 4px 0; }
+
+      .scan-prompt {
+        margin-top: 15px; color: rgba(255, 255, 255, 0.9);
+        font-size: 14px; letter-spacing: 1px;
+        text-shadow: 0 0 5px black; background: rgba(0,0,0,0.6);
+        padding: 8px 16px; border-radius: 20px; transition: opacity 0.3s;
       }
 
-      /* 加強文字背景以利色盲辨識 */
-      .scan-prompt {
-        margin-top: 15px;
-        color: rgba(255, 255, 255, 0.9);
-        font-size: 14px;
-        letter-spacing: 1px;
-        text-shadow: 0 0 5px black;
-        background: rgba(0,0,0,0.6); /* 加深背景 */
-        padding: 8px 16px;
-        border-radius: 20px;
+      /* --- 辨識成功特效文字 --- */
+      #success-text {
+        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        font-family: 'Times New Roman', serif; font-size: 32px; font-weight: bold; color: #ffd700;
+        text-shadow: 0 0 10px #ffd700, 0 0 20px #ff8c00; opacity: 0; pointer-events: none; z-index: 150;
+        letter-spacing: 5px; white-space: nowrap;
+      }
+      #success-text.show { animation: textFadeInUp 1s ease forwards; }
+      @keyframes textFadeInUp {
+        0% { opacity: 0; transform: translate(-50%, -30%); }
+        100% { opacity: 1; transform: translate(-50%, -50%); }
+      }
+
+      /* --- 左下方模型載入狀態 --- */
+      #preload-status {
+        position: fixed; bottom: 20px; left: 20px;
+        background: rgba(0, 0, 0, 0.6); color: rgba(255,255,255,0.8);
+        padding: 8px 15px; border-radius: 8px;
+        font-size: 12px; font-family: monospace;
+        z-index: 200; border-left: 3px solid #aaa;
+        transition: all 0.5s; pointer-events: none;
+      }
+      #preload-status.complete {
+        border-left-color: #00ff00; color: #fff; text-shadow: 0 0 5px #00ff00;
       }
 
       .a-enter-vr-button, .a-loader-title { display: none !important; }
     </style>
 
     <script>
-      document.addEventListener("DOMContentLoaded", function() {
-        const scene = document.querySelector('a-scene');
-        const loader = document.querySelector('#custom-loading');
-        const progressBar = document.querySelector('.progress-bar');
-        const progressWrapper = document.querySelector('.progress-wrapper');
-        const startBtn = document.querySelector('#start-btn');
-        const scanOverlay = document.querySelector('#scan-overlay'); 
-        
-        const bgm = document.querySelector('#bgm-audio');
-        const sfx = document.querySelector('#sfx-spawn');
-        
-        // 模擬 Loading
-        let progress = 0;
-        const interval = setInterval(() => {
-          if (progress < 90) {
-            progress += Math.random() * 8; 
-            progressBar.style.width = progress + '%';
+      AFRAME.registerComponent('app-manager', {
+        init: function() {
+          this.preloadStatus = document.getElementById('preload-status');
+          this.scanOverlay = document.getElementById('scan-overlay');
+          this.reticle = document.querySelector('.scan-reticle');
+          this.prompt = document.querySelector('.scan-prompt');
+          this.successText = document.getElementById('success-text');
+          this.sfx = document.querySelector('#sfx-spawn');
+          
+          this.totalModels = 3;
+          this.loadedCount = 0;
+          this.isRecognitionLocked = false; 
+
+          // 1. 監聽模型載入 (平行下載回報)
+          const models = document.querySelectorAll('a-entity[gltf-model]');
+          models.forEach(model => {
+            model.addEventListener('model-loaded', () => {
+              this.loadedCount++;
+              console.log(`Model Loaded: ${this.loadedCount}/${this.totalModels}`);
+              this.updateStatusUI();
+            });
+          });
+
+          // 2. 辨識事件監聽
+          const targets = document.querySelectorAll('[mindar-image-target]');
+          targets.forEach(target => {
+            target.addEventListener('targetFound', () => {
+              if (this.isRecognitionLocked) return; 
+              this.triggerSuccessEffect(target);
+            });
+
+            target.addEventListener('targetLost', () => {
+               setTimeout(() => {
+                 if (!this.isAnyTargetVisible() && !this.isRecognitionLocked) {
+                   this.scanOverlay.classList.remove('hidden');
+                   this.scanOverlay.classList.add('visible');
+                   this.reticle.classList.remove('success-flash'); 
+                 }
+               }, 500);
+            });
+          });
+        },
+
+        updateStatusUI: function() {
+          if (this.loadedCount > this.totalModels) this.loadedCount = this.totalModels;
+          // 修改：將文字也調整為「神秘特典」以防穿幫
+          this.preloadStatus.innerText = `神秘特典載入中... (${this.loadedCount}/${this.totalModels})`;
+          
+          if (this.loadedCount === this.totalModels) {
+            this.preloadStatus.innerText = `資源準備就緒 (${this.loadedCount}/${this.totalModels})`;
+            this.preloadStatus.classList.add('complete');
+            setTimeout(() => { this.preloadStatus.style.opacity = '0'; }, 5000);
           }
-        }, 80);
+        },
 
-        // AR Ready
-        scene.addEventListener('arReady', () => {
-          clearInterval(interval);
-          progressBar.style.width = '100%';
-          setTimeout(() => {
-            progressWrapper.style.display = 'none';
-            startBtn.style.display = 'block';
-          }, 300);
-        });
+        triggerSuccessEffect: function(target) {
+          this.isRecognitionLocked = true; 
 
-        // 點擊開始
-        startBtn.addEventListener('click', () => {
-          // 播放音樂
-          if(bgm) { 
-            bgm.volume = 0.5;
-            const playPromise = bgm.play();
-            if (playPromise !== undefined) { playPromise.catch(e => {}); }
+          this.reticle.classList.add('success-flash');
+          this.prompt.style.opacity = '0'; 
+          this.successText.classList.add('show');
+
+          if(this.sfx) {
+             this.sfx.currentTime = 0;
+             const p = this.sfx.play();
+             if(p !== undefined) p.catch(()=>{});
           }
 
-          // 淡出 Loading
-          loader.style.opacity = '0';
           setTimeout(() => {
-            loader.style.display = 'none';
-            // 顯示掃描框
-            scanOverlay.classList.add('visible');
-          }, 800);
-        });
-
-        // --- 多重 Target 監聽邏輯 (3個目標) ---
-        const targets = document.querySelectorAll('[mindar-image-target]');
-        let activeTargets = 0; // 追蹤目前有多少個目標被偵測到
-
-        targets.forEach(target => {
-          target.addEventListener('targetFound', () => {
-            activeTargets++;
-            if (activeTargets > 0) {
-              scanOverlay.classList.add('hidden');
-            }
-
-            // 播放音效
-            if(sfx) {
-               sfx.currentTime = 0;
-               const sfxPromise = sfx.play();
-               if (sfxPromise !== undefined) { sfxPromise.catch(e => {}); }
-            }
+            this.scanOverlay.classList.remove('visible');
+            this.scanOverlay.classList.add('hidden');
+            this.successText.classList.remove('show');
             
-            // 找到該目標底下的模型並播放登場動畫
-            const model = target.querySelector('a-gltf-model');
-            if (model) {
-              // 重置 scale 確保動畫每次都播放
-              model.setAttribute('scale', '0 0 0');
+            const model = target.querySelector('a-entity[gltf-model]');
+            if(model) {
+              model.setAttribute('visible', true);
               model.removeAttribute('animation__spawn');
               model.setAttribute('animation__spawn', {
                 property: 'scale',
@@ -257,15 +235,83 @@
                 easing: 'easeOutElastic'
               });
             }
-          });
+            this.isRecognitionLocked = false;
+          }, 1500);
+        },
 
-          target.addEventListener('targetLost', () => {
-            activeTargets--;
-            if (activeTargets <= 0) {
-              activeTargets = 0; 
-              scanOverlay.classList.remove('hidden');
-            }
+        isAnyTargetVisible: function() {
+          const targets = document.querySelectorAll('[mindar-image-target]');
+          let visible = false;
+          targets.forEach(t => {
+            if (t.object3D.visible) visible = true;
           });
+          return visible;
+        }
+      });
+
+      document.addEventListener("DOMContentLoaded", function() {
+        const scene = document.querySelector('a-scene');
+        const loader = document.querySelector('#custom-loading');
+        const progressBar = document.querySelector('.progress-bar');
+        const progressWrapper = document.querySelector('.progress-wrapper');
+        const startBtn = document.querySelector('#start-btn');
+        const errorMsg = document.querySelector('#error-msg');
+        const scanOverlay = document.querySelector('#scan-overlay'); 
+        const bgm = document.querySelector('#bgm-audio');
+        const subtext = document.querySelector('.loading-subtext'); 
+        
+        // --- 強制 20 秒計時器邏輯 ---
+        const MIN_LOAD_TIME = 20000; // 20 秒
+        const startTime = Date.now();
+        let isArReady = false;
+        let isTimeUp = false;
+
+        const interval = setInterval(() => {
+          const elapsed = Date.now() - startTime;
+          let percent = (elapsed / MIN_LOAD_TIME) * 100;
+          
+          if (percent >= 100) {
+            percent = 100;
+            isTimeUp = true;
+            clearInterval(interval);
+            checkReadyState();
+          }
+          progressBar.style.width = percent + '%';
+        }, 50); 
+
+        scene.addEventListener('arReady', () => {
+          console.log("AR System Ready (Waiting for timer...)");
+          isArReady = true;
+          checkReadyState(); 
+        });
+
+        scene.addEventListener('arError', (event) => {
+          clearInterval(interval);
+          progressBar.style.backgroundColor = 'red';
+          errorMsg.style.display = 'block';
+          errorMsg.innerText = '系統載入失敗，請檢查網路或重新整理';
+        });
+
+        function checkReadyState() {
+          if (isTimeUp && isArReady) {
+            progressWrapper.style.display = 'none';
+            subtext.style.display = 'none'; // 隱藏等待提示
+            startBtn.style.display = 'block';
+          }
+        }
+
+        startBtn.addEventListener('click', () => {
+          if(bgm) { 
+            bgm.volume = 0.5;
+            const p = bgm.play();
+            if (p !== undefined) { p.catch(e => { console.log("BGM play failed", e); }); }
+          }
+
+          loader.style.opacity = '0';
+          setTimeout(() => {
+            loader.style.display = 'none';
+            scanOverlay.classList.add('visible');
+          }, 800);
         });
       });
 
@@ -292,15 +338,11 @@
           const gestureContinues = previousState && currentState && currentState.touchCount == previousState.touchCount;
           const gestureStarted = currentState && !gestureContinues;
           const gestureEnded = previousState && !gestureContinues;
-
           if (gestureEnded) { this.el.emit("gesture-end"); }
           if (gestureStarted) { this.el.emit("gesture-start"); }
           if (gestureContinues) {
             const detail = {
-              positionChange: { 
-                x: currentState.position.x - previousState.position.x, 
-                y: currentState.position.y - previousState.position.y 
-              },
+              positionChange: { x: currentState.position.x - previousState.position.x, y: currentState.position.y - previousState.position.y },
               spreadChange: currentState.spread - previousState.spread,
               startSpread: currentState.startSpread,
               position: currentState.position
@@ -336,7 +378,6 @@
           this.initialScale = this.el.object3D.scale.clone();
           this.scaleFactor = 1;
           this.el.object3D.rotation.order = 'YXZ'; 
-
           this.el.sceneEl.addEventListener("gesture-move", this.handleRotation);
           this.el.sceneEl.addEventListener("gesture-move", this.handleScale);
         },
@@ -347,7 +388,6 @@
         handleRotation: function(event) {
           if (event.detail.spreadChange) { return; } 
           if (this.el.object3D.visible === false) return;
-
           this.el.object3D.rotation.x += event.detail.positionChange.y * this.data.rotationFactor * 0.005;
           this.el.object3D.rotation.y += event.detail.positionChange.x * this.data.rotationFactor * 0.005;
         },
@@ -367,27 +407,35 @@
   </head>
   
   <body>
-    <!-- 1. 客製化 Loading 介面 -->
     <div id="custom-loading">
       <div class="loading-gif-container">
-        <!-- 優先讀取 loading.gif，備用貓咪圖 -->
         <img src="./loading.gif" alt="Loading Animation" loading="eager" onerror="this.onerror=null; this.src='https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3pueXAxZnl4Y3R6Y3I4Z3R6Y3I4Z3R6eSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9cw/L0ZnJk3x7yT8G2yqX/giphy.gif';">
       </div>
+      
+      <!-- 可愛跳動標題 -->
       <div class="loading-text">rniko 特製A賞特典</div>
+      
       <div class="progress-wrapper"><div class="progress-bar"></div></div>
+      
+      <!-- 底部補充說明 (修改處：避免破梗 + iOS 備用建議) -->
+      <div class="loading-subtext">
+        神秘特典檔案較大，請耐心等候唷~<br>
+        iOS用戶若異常，請切換到Chrome嘗試
+      </div>
+      
       <button id="start-btn">開始體驗</button>
+      <div id="error-msg"></div>
     </div>
 
-    <!-- 2. 掃描對焦框 -->
     <div id="scan-overlay">
       <div class="scan-reticle"></div>
       <div class="scan-prompt">請從特典卡牌找尋目標</div>
     </div>
+    
+    <div id="success-text">辨識成功</div>
+    <div id="preload-status">模型資料載入中... (0/3)</div>
 
-    <!-- 3. AR 場景 (恢復正常光照，無陰影) -->
-    <!-- 
-       imageTargetSrc: ./targets.mind (必須包含3張圖片)
-    -->
+    <!-- AR 場景 -->
     <a-scene 
       mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.001; uiScanning: no; uiLoading: no;" 
       loading-screen="enabled: false"
@@ -395,60 +443,57 @@
       renderer="colorManagement: true, physicallyCorrectLights" 
       vr-mode-ui="enabled: false" 
       device-orientation-permission-ui="enabled: false"
-      gesture-detector>
+      gesture-detector
+      app-manager> 
       
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
       <a-light type="ambient" intensity="1"></a-light>
       <a-light type="directional" position="1 1 1" intensity="1.5"></a-light>
 
-      <!-- Target A (Index 0) -> titan_model_A.glb -->
+      <!-- 平行下載 & Draco -->
+      
+      <!-- Target A -->
       <a-entity mindar-image-target="targetIndex: 0" id="target-a">
-        <a-gltf-model 
+        <a-entity 
           id="model-a"
-          src="./titan_model_A.glb" 
-          position="0 0 0" 
-          rotation="0 0 0" 
-          scale="0.5 0.5 0.5" 
-          class="clickable"
+          gltf-model="src: url(./titan_model_A.glb); dracoDecoderPath: https://www.gstatic.com/draco/versioned/decoders/1.5.6/;"
+          position="0 0 0" rotation="0 0 0" scale="0.5 0.5 0.5" 
+          class="clickable" visible="false"
           animation-mixer="clip: *; loop: repeat;"
           gesture-handler> 
-        </a-gltf-model>
+        </a-entity>
       </a-entity>
 
-      <!-- Target B (Index 1) -> titan_model_B.glb -->
+      <!-- Target B -->
       <a-entity mindar-image-target="targetIndex: 1" id="target-b">
-        <a-gltf-model 
+        <a-entity 
           id="model-b"
-          src="./titan_model_B.glb" 
-          position="0 0 0" 
-          rotation="0 0 0" 
-          scale="0.5 0.5 0.5" 
-          class="clickable"
+          gltf-model="src: url(./titan_model_B.glb); dracoDecoderPath: https://www.gstatic.com/draco/versioned/decoders/1.5.6/;"
+          position="0 0 0" rotation="0 0 0" scale="0.5 0.5 0.5" 
+          class="clickable" visible="false"
           animation-mixer="clip: *; loop: repeat;"
           gesture-handler> 
-        </a-gltf-model>
+        </a-entity>
       </a-entity>
 
-      <!-- Target C (Index 2) -> titan_model_C.glb (新增) -->
+      <!-- Target C -->
       <a-entity mindar-image-target="targetIndex: 2" id="target-c">
-        <a-gltf-model 
+        <a-entity 
           id="model-c"
-          src="./titan_model_C.glb" 
-          position="0 0 0" 
-          rotation="0 0 0" 
-          scale="0.5 0.5 0.5" 
-          class="clickable"
+          gltf-model="src: url(./titan_model_C.glb); dracoDecoderPath: https://www.gstatic.com/draco/versioned/decoders/1.5.6/;"
+          position="0 0 0" rotation="0 0 0" scale="0.5 0.5 0.5" 
+          class="clickable" visible="false"
           animation-mixer="clip: *; loop: repeat;"
           gesture-handler> 
-        </a-gltf-model>
+        </a-entity>
       </a-entity>
 
     </a-scene>
 
-    <!-- 音效資源 -->
-    <audio id="bgm-audio" src="bgm.mp3" loop preload="metadata"></audio>
-    <audio id="sfx-spawn" src="spawn.mp3" preload="metadata"></audio>
+    <!-- 音樂優先策略：恢復 auto preload -->
+    <audio id="bgm-audio" src="bgm.mp3" loop preload="auto"></audio>
+    <audio id="sfx-spawn" src="spawn.mp3" preload="auto"></audio>
 
   </body>
 </html>
