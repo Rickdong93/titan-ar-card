@@ -25,7 +25,6 @@
         transition: opacity 0.8s ease-out;
       }
       .loading-gif-container {
-        /* 尺寸加大至 70vh */
         height: 70vh; aspect-ratio: 9/16; max-width: 95vw;
         margin-bottom: 20px; display: flex; align-items: center; justify-content: center;
         background-color: rgba(255, 255, 255, 0.05); border-radius: 15px; padding: 10px;
@@ -33,30 +32,25 @@
       }
       .loading-gif-container img { width: 100%; height: 100%; object-fit: contain; }
       
-      /* UI 層級設定 */
       .loading-text, .progress-wrapper, #start-btn, .loading-subtext { 
         position: relative; z-index: 10; 
       }
 
-      /* --- 標題文字特效 (可愛跳動版) --- */
       .loading-text {
         color: white; font-size: 22px; font-weight: bold; margin-bottom: 15px;
         letter-spacing: 2px; text-align: center;
-        /* 粉色系光暈，增加可愛感 */
         text-shadow: 0 0 10px #ff9a9e, 0 0 20px #ff69b4;
-        /* 跳動動畫 */
         animation: cuteBounce 1s infinite ease-in-out;
       }
       @keyframes cuteBounce {
         0%, 100% { transform: translateY(0); }
-        50% { transform: translateY(-8px); } /* 輕微上跳 */
+        50% { transform: translateY(-8px); } 
       }
 
-      /* --- 底部補充說明文字 (修改處) --- */
       .loading-subtext {
         font-size: 12px; color: rgba(255, 255, 255, 0.6);
         margin-top: 15px; letter-spacing: 1px; text-align: center;
-        line-height: 1.6; /* 增加行高，讓兩行文字不要黏太緊 */
+        line-height: 1.6; 
       }
 
       .progress-wrapper {
@@ -120,12 +114,17 @@
         padding: 8px 16px; border-radius: 20px; transition: opacity 0.3s;
       }
 
-      /* --- 辨識成功特效文字 --- */
+      /* --- 辨識成功特效文字 (改為英文典雅風格) --- */
       #success-text {
         position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-        font-family: 'Times New Roman', serif; font-size: 32px; font-weight: bold; color: #ffd700;
-        text-shadow: 0 0 10px #ffd700, 0 0 20px #ff8c00; opacity: 0; pointer-events: none; z-index: 150;
-        letter-spacing: 5px; white-space: nowrap;
+        /* 襯線體，典雅感 */
+        font-family: 'Times New Roman', serif; 
+        font-size: 28px; /* 稍微調整字體大小 */
+        font-weight: bold; color: #ffd700;
+        /* 金色光暈 */
+        text-shadow: 0 0 10px #ffd700, 0 0 20px #ff8c00; 
+        opacity: 0; pointer-events: none; z-index: 150;
+        letter-spacing: 3px; white-space: nowrap;
       }
       #success-text.show { animation: textFadeInUp 1s ease forwards; }
       @keyframes textFadeInUp {
@@ -133,17 +132,20 @@
         100% { opacity: 1; transform: translate(-50%, -50%); }
       }
 
-      /* --- 左下方模型載入狀態 --- */
-      #preload-status {
+      /* --- 左下方狀態列 (雙重顯示) --- */
+      #status-panel {
         position: fixed; bottom: 20px; left: 20px;
         background: rgba(0, 0, 0, 0.6); color: rgba(255,255,255,0.8);
-        padding: 8px 15px; border-radius: 8px;
+        padding: 10px 15px; border-radius: 8px;
         font-size: 12px; font-family: monospace;
         z-index: 200; border-left: 3px solid #aaa;
-        transition: all 0.5s; pointer-events: none;
+        pointer-events: none;
+        line-height: 1.6; /* 增加行距 */
       }
-      #preload-status.complete {
-        border-left-color: #00ff00; color: #fff; text-shadow: 0 0 5px #00ff00;
+      /* 完成時的樣式 (綠色提示) */
+      .status-line.complete {
+        color: #00ff00;
+        text-shadow: 0 0 5px #00ff00;
       }
 
       .a-enter-vr-button, .a-loader-title { display: none !important; }
@@ -152,7 +154,9 @@
     <script>
       AFRAME.registerComponent('app-manager', {
         init: function() {
-          this.preloadStatus = document.getElementById('preload-status');
+          // UI 元素
+          this.resourceStatus = document.getElementById('resource-status');
+          this.unlockStatus = document.getElementById('unlock-status');
           this.scanOverlay = document.getElementById('scan-overlay');
           this.reticle = document.querySelector('.scan-reticle');
           this.prompt = document.querySelector('.scan-prompt');
@@ -161,9 +165,10 @@
           
           this.totalModels = 3;
           this.loadedCount = 0;
+          this.foundSet = new Set(); // 使用 Set 來記錄已解鎖的 Target ID，避免重複計算
           this.isRecognitionLocked = false; 
 
-          // 1. 監聽模型載入 (平行下載回報)
+          // 1. 監聽模型載入
           const models = document.querySelectorAll('a-entity[gltf-model]');
           models.forEach(model => {
             model.addEventListener('model-loaded', () => {
@@ -177,6 +182,12 @@
           const targets = document.querySelectorAll('[mindar-image-target]');
           targets.forEach(target => {
             target.addEventListener('targetFound', () => {
+              // 記錄解鎖進度
+              if (!this.foundSet.has(target.id)) {
+                this.foundSet.add(target.id);
+                this.updateStatusUI();
+              }
+
               if (this.isRecognitionLocked) return; 
               this.triggerSuccessEffect(target);
             });
@@ -191,17 +202,29 @@
                }, 500);
             });
           });
+          
+          // 初始化 UI
+          this.updateStatusUI();
         },
 
         updateStatusUI: function() {
-          if (this.loadedCount > this.totalModels) this.loadedCount = this.totalModels;
-          // 修改：將文字也調整為「神秘特典」以防穿幫
-          this.preloadStatus.innerText = `神秘特典載入中... (${this.loadedCount}/${this.totalModels})`;
-          
-          if (this.loadedCount === this.totalModels) {
-            this.preloadStatus.innerText = `資源準備就緒 (${this.loadedCount}/${this.totalModels})`;
-            this.preloadStatus.classList.add('complete');
-            setTimeout(() => { this.preloadStatus.style.opacity = '0'; }, 5000);
+          // 更新載入進度文字
+          const loadText = document.getElementById('resource-status');
+          if (this.loadedCount >= this.totalModels) {
+            loadText.innerText = `資源載入成功 (${this.totalModels}/${this.totalModels})`;
+            loadText.classList.add('complete');
+          } else {
+            loadText.innerText = `資源載入中... (${this.loadedCount}/${this.totalModels})`;
+          }
+
+          // 更新解鎖進度文字
+          const unlockText = document.getElementById('unlock-status');
+          const unlockedCount = this.foundSet.size;
+          if (unlockedCount >= this.totalModels) {
+            unlockText.innerText = `已解鎖體驗 (${unlockedCount}/${this.totalModels})`;
+            unlockText.classList.add('complete');
+          } else {
+            unlockText.innerText = `已解鎖體驗 (${unlockedCount}/${this.totalModels})`;
           }
         },
 
@@ -417,7 +440,7 @@
       
       <div class="progress-wrapper"><div class="progress-bar"></div></div>
       
-      <!-- 底部補充說明 (修改處：避免破梗 + iOS 備用建議) -->
+      <!-- 底部補充說明 -->
       <div class="loading-subtext">
         神秘特典檔案較大，請耐心等候唷~<br>
         iOS用戶若異常，請切換到Chrome嘗試
@@ -432,8 +455,14 @@
       <div class="scan-prompt">請從特典卡牌找尋目標</div>
     </div>
     
-    <div id="success-text">辨識成功</div>
-    <div id="preload-status">模型資料載入中... (0/3)</div>
+    <!-- 辨識成功文字 (英文典雅版) -->
+    <div id="success-text">TARGET ACQUIRED</div>
+
+    <!-- 左下方狀態面板 (雙行顯示) -->
+    <div id="status-panel">
+      <div id="resource-status" class="status-line">資源載入中... (0/3)</div>
+      <div id="unlock-status" class="status-line">已解鎖體驗 (0/3)</div>
+    </div>
 
     <!-- AR 場景 -->
     <a-scene 
