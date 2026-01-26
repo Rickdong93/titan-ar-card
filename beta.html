@@ -52,6 +52,11 @@
         font-size: 18px; font-weight: bold; cursor: pointer;
         box-shadow: 0 0 15px rgba(255, 255, 255, 0.5); animation: pulse 2s infinite;
       }
+      /* 錯誤訊息樣式 */
+      #error-msg {
+        display: none; color: #ff4444; margin-top: 15px; font-weight: bold; text-align: center;
+      }
+
       @keyframes pulse {
         0% { transform: scale(1); box-shadow: 0 0 10px rgba(255,255,255,0.5); }
         50% { transform: scale(1.05); box-shadow: 0 0 20px rgba(255,255,255,0.8); }
@@ -156,8 +161,8 @@
               this.loadedCount++;
               this.updateStatusUI();
             });
-            // 如果模型有快取瞬間載入，可能不會觸發 listener，這裡做個保險
-            if (model.components.gltf - model && model.components.gltf - model.model) {
+            // 雙重檢查：如果模型因為快取瞬間載入
+            if (model.components.gltf && model.components.gltf.model) {
                  this.loadedCount++;
                  this.updateStatusUI();
             }
@@ -182,6 +187,17 @@
                  }
                }, 500);
             });
+          });
+        },
+
+        // --- 核心修正：觸發模型下載 ---
+        startLoadingModels: function() {
+          const models = document.querySelectorAll('a-gltf-model');
+          models.forEach(model => {
+            const src = model.getAttribute('data-src');
+            if (src) {
+              model.setAttribute('src', src); // 將 data-src 填入 src，瀏覽器這時才開始下載
+            }
           });
         },
 
@@ -257,6 +273,7 @@
         const progressBar = document.querySelector('.progress-bar');
         const progressWrapper = document.querySelector('.progress-wrapper');
         const startBtn = document.querySelector('#start-btn');
+        const errorMsg = document.querySelector('#error-msg');
         const scanOverlay = document.querySelector('#scan-overlay'); 
         const bgm = document.querySelector('#bgm-audio');
         
@@ -266,7 +283,7 @@
           if (progress < 90) { progress += Math.random() * 8; progressBar.style.width = progress + '%'; }
         }, 80);
 
-        // AR Ready
+        // AR Ready (代表 MindAR 準備好了)
         scene.addEventListener('arReady', () => {
           clearInterval(interval);
           progressBar.style.width = '100%';
@@ -276,13 +293,31 @@
           }, 300);
         });
 
+        // 錯誤偵測 (如 targets.mind 讀取失敗)
+        scene.addEventListener('arError', (event) => {
+          clearInterval(interval);
+          progressBar.style.backgroundColor = 'red';
+          errorMsg.style.display = 'block';
+          errorMsg.innerText = '系統載入失敗，請檢查網路或重新整理';
+          console.error("AR Error:", event);
+        });
+
         // 點擊開始
         startBtn.addEventListener('click', () => {
+          // 1. 觸發模型下載 (關鍵修正！)
+          const appManager = scene.components['app-manager'];
+          if (appManager) {
+            appManager.startLoadingModels();
+          }
+
+          // 2. 播放音樂
           if(bgm) { 
             bgm.volume = 0.5;
             const p = bgm.play();
             if (p !== undefined) { p.catch(e => {}); }
           }
+
+          // 3. 淡出 Loading
           loader.style.opacity = '0';
           setTimeout(() => {
             loader.style.display = 'none';
@@ -391,6 +426,7 @@
       <div class="loading-text">rniko 特製A賞特典</div>
       <div class="progress-wrapper"><div class="progress-bar"></div></div>
       <button id="start-btn">開始體驗</button>
+      <div id="error-msg"></div> <!-- 錯誤訊息容器 -->
     </div>
 
     <!-- 2. 掃描對焦框 -->
@@ -423,13 +459,12 @@
 
       <!-- 
         Target A -> titan_model_A.glb 
-        注意：這裡移除了 visible="false"，改為預設隱藏交給 JS 控制，
-        且 src 存在就會開始在背景下載 (Preload)
+        【重要修正】使用 data-src，初始 src 為空，避免搶頻寬
       -->
       <a-entity mindar-image-target="targetIndex: 0" id="target-a">
         <a-gltf-model 
           id="model-a"
-          src="./titan_model_A.glb" 
+          data-src="./titan_model_A.glb" 
           position="0 0 0" 
           rotation="0 0 0" 
           scale="0.5 0.5 0.5" 
@@ -444,7 +479,7 @@
       <a-entity mindar-image-target="targetIndex: 1" id="target-b">
         <a-gltf-model 
           id="model-b"
-          src="./titan_model_B.glb" 
+          data-src="./titan_model_B.glb" 
           position="0 0 0" 
           rotation="0 0 0" 
           scale="0.5 0.5 0.5" 
@@ -459,7 +494,7 @@
       <a-entity mindar-image-target="targetIndex: 2" id="target-c">
         <a-gltf-model 
           id="model-c"
-          src="./titan_model_C.glb" 
+          data-src="./titan_model_C.glb" 
           position="0 0 0" 
           rotation="0 0 0" 
           scale="0.5 0.5 0.5" 
