@@ -52,10 +52,11 @@
         50% { transform: translateY(-8px); } /* 輕微上跳 */
       }
 
-      /* --- 底部補充說明文字 --- */
+      /* --- 底部補充說明文字 (修改處) --- */
       .loading-subtext {
         font-size: 12px; color: rgba(255, 255, 255, 0.6);
-        margin-top: 15px; letter-spacing: 1px;
+        margin-top: 15px; letter-spacing: 1px; text-align: center;
+        line-height: 1.6; /* 增加行高，讓兩行文字不要黏太緊 */
       }
 
       .progress-wrapper {
@@ -194,7 +195,8 @@
 
         updateStatusUI: function() {
           if (this.loadedCount > this.totalModels) this.loadedCount = this.totalModels;
-          this.preloadStatus.innerText = `模型資料載入中... (${this.loadedCount}/${this.totalModels})`;
+          // 修改：將文字也調整為「神秘特典」以防穿幫
+          this.preloadStatus.innerText = `神秘特典載入中... (${this.loadedCount}/${this.totalModels})`;
           
           if (this.loadedCount === this.totalModels) {
             this.preloadStatus.innerText = `資源準備就緒 (${this.loadedCount}/${this.totalModels})`;
@@ -256,7 +258,7 @@
         const errorMsg = document.querySelector('#error-msg');
         const scanOverlay = document.querySelector('#scan-overlay'); 
         const bgm = document.querySelector('#bgm-audio');
-        const subtext = document.querySelector('.loading-subtext'); // 底部文字
+        const subtext = document.querySelector('.loading-subtext'); 
         
         // --- 強制 20 秒計時器邏輯 ---
         const MIN_LOAD_TIME = 20000; // 20 秒
@@ -415,8 +417,11 @@
       
       <div class="progress-wrapper"><div class="progress-bar"></div></div>
       
-      <!-- 底部補充說明 -->
-      <div class="loading-subtext">模型檔案較大，請耐心等候唷~</div>
+      <!-- 底部補充說明 (修改處：避免破梗 + iOS 備用建議) -->
+      <div class="loading-subtext">
+        神秘特典檔案較大，請耐心等候唷~<br>
+        iOS用戶若異常，請切換到Chrome嘗試
+      </div>
       
       <button id="start-btn">開始體驗</button>
       <div id="error-msg"></div>
