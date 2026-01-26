@@ -63,7 +63,7 @@
         100% { transform: scale(1); box-shadow: 0 0 10px rgba(255,255,255,0.5); }
       }
 
-      /* --- 掃描對焦框 UI (含特效樣式) --- */
+      /* --- 掃描對焦框 UI --- */
       #scan-overlay {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         z-index: 100; pointer-events: none;
@@ -152,17 +152,27 @@
           
           this.totalModels = 3;
           this.loadedCount = 0;
-          this.isRecognitionLocked = false; // 防止重複觸發特效
+          this.isRecognitionLocked = false; 
 
-          // 1. 綁定模型載入事件 (計數器邏輯)
-          const models = document.querySelectorAll('a-gltf-model');
-          models.forEach(model => {
+          // 定義模型順序陣列 - 改用 [gltf-model] 選擇器
+          this.modelElements = [
+            document.querySelector('#model-a'),
+            document.querySelector('#model-b'),
+            document.querySelector('#model-c')
+          ];
+
+          // 1. 綁定模型載入完成事件，觸發下一個下載
+          this.modelElements.forEach((model, index) => {
             model.addEventListener('model-loaded', () => {
+              console.log(`Model ${index + 1} Loaded.`);
               this.loadedCount++;
               this.updateStatusUI();
+              
+              // 載入下一個模型 (序列式載入)
+              this.loadModelByIndex(index + 1);
             });
-            // 雙重檢查：如果模型因為快取瞬間載入
-            if (model.components.gltf && model.components.gltf.model) {
+            // 雙重檢查 (針對 gltf-model 組件)
+            if (model.components['gltf-model'] && model.components['gltf-model'].model) {
                  this.loadedCount++;
                  this.updateStatusUI();
             }
@@ -172,33 +182,41 @@
           const targets = document.querySelectorAll('[mindar-image-target]');
           targets.forEach(target => {
             target.addEventListener('targetFound', () => {
-              if (this.isRecognitionLocked) return; // 避免特效重疊
-              
+              if (this.isRecognitionLocked) return; 
               this.triggerSuccessEffect(target);
             });
 
             target.addEventListener('targetLost', () => {
-               // 只有當所有目標都丟失，且特效沒在跑時，才顯示掃描框
                setTimeout(() => {
                  if (!this.isAnyTargetVisible() && !this.isRecognitionLocked) {
                    this.scanOverlay.classList.remove('hidden');
                    this.scanOverlay.classList.add('visible');
-                   this.reticle.classList.remove('success-flash'); // 重置樣式
+                   this.reticle.classList.remove('success-flash'); 
                  }
                }, 500);
             });
           });
         },
 
-        // --- 核心修正：觸發模型下載 ---
-        startLoadingModels: function() {
-          const models = document.querySelectorAll('a-gltf-model');
-          models.forEach(model => {
-            const src = model.getAttribute('data-src');
-            if (src) {
-              model.setAttribute('src', src); // 將 data-src 填入 src，瀏覽器這時才開始下載
-            }
-          });
+        // --- 核心修正：序列式觸發模型下載 ---
+        startLoadingSequence: function() {
+          // 只開始下載第一個，後續由 model-loaded 事件觸發
+          this.loadModelByIndex(0);
+        },
+
+        loadModelByIndex: function(index) {
+          if (index >= this.modelElements.length) return; // 全部載完
+          
+          const model = this.modelElements[index];
+          const src = model.getAttribute('data-src');
+          // 檢查是否已設定 src，避免重複下載
+          // 注意：現在是檢查 gltf-model 屬性中的 src
+          const currentAttr = model.getAttribute('gltf-model');
+          if (src && (!currentAttr || !currentAttr.src)) {
+            console.log(`Starting download for Model ${index + 1}`);
+            // 使用 Draco 兼容的設定方式
+            model.setAttribute('gltf-model', 'src', src); 
+          }
         },
 
         updateStatusUI: function() {
@@ -208,37 +226,29 @@
           if (this.loadedCount === this.totalModels) {
             this.preloadStatus.innerText = `資源準備就緒 (${this.loadedCount}/${this.totalModels})`;
             this.preloadStatus.classList.add('complete');
-            // 3秒後淡出
             setTimeout(() => { this.preloadStatus.style.opacity = '0'; }, 3000);
           }
         },
 
         triggerSuccessEffect: function(target) {
-          this.isRecognitionLocked = true; // 鎖定特效播放中
+          this.isRecognitionLocked = true; 
 
-          // A. 視覺特效：掃描框變金色閃爍
           this.reticle.classList.add('success-flash');
-          this.prompt.style.opacity = '0'; // 隱藏提示字
-          
-          // B. 顯示典雅文字
+          this.prompt.style.opacity = '0'; 
           this.successText.classList.add('show');
 
-          // C. 播放音效
           if(this.sfx) {
              this.sfx.currentTime = 0;
              const p = this.sfx.play();
              if(p !== undefined) p.catch(()=>{});
           }
 
-          // D. 延遲 1.5 秒後才顯示模型 (讓使用者看完特效)
           setTimeout(() => {
-            // 隱藏掃描UI
             this.scanOverlay.classList.remove('visible');
             this.scanOverlay.classList.add('hidden');
             this.successText.classList.remove('show');
             
-            // 顯示模型
-            const model = target.querySelector('a-gltf-model');
+            const model = target.querySelector('[gltf-model]');
             if(model) {
               model.setAttribute('visible', true);
               model.removeAttribute('animation__spawn');
@@ -250,8 +260,6 @@
                 easing: 'easeOutElastic'
               });
             }
-            
-            // 解鎖
             this.isRecognitionLocked = false;
           }, 1500);
         },
@@ -277,13 +285,11 @@
         const scanOverlay = document.querySelector('#scan-overlay'); 
         const bgm = document.querySelector('#bgm-audio');
         
-        // 模擬 Loading
         let progress = 0;
         const interval = setInterval(() => {
           if (progress < 90) { progress += Math.random() * 8; progressBar.style.width = progress + '%'; }
         }, 80);
 
-        // AR Ready (代表 MindAR 準備好了)
         scene.addEventListener('arReady', () => {
           clearInterval(interval);
           progressBar.style.width = '100%';
@@ -293,7 +299,6 @@
           }, 300);
         });
 
-        // 錯誤偵測 (如 targets.mind 讀取失敗)
         scene.addEventListener('arError', (event) => {
           clearInterval(interval);
           progressBar.style.backgroundColor = 'red';
@@ -302,27 +307,28 @@
           console.error("AR Error:", event);
         });
 
-        // 點擊開始
         startBtn.addEventListener('click', () => {
-          // 1. 觸發模型下載 (關鍵修正！)
-          const appManager = scene.components['app-manager'];
-          if (appManager) {
-            appManager.startLoadingModels();
-          }
-
-          // 2. 播放音樂
+          // 1. 優先處理音樂：改為 auto preload 並在點擊當下播放
           if(bgm) { 
             bgm.volume = 0.5;
             const p = bgm.play();
-            if (p !== undefined) { p.catch(e => {}); }
+            if (p !== undefined) { p.catch(e => { console.log("BGM play failed", e); }); }
           }
 
-          // 3. 淡出 Loading
+          // 2. UI 處理：Loading 消失
           loader.style.opacity = '0';
+          
           setTimeout(() => {
             loader.style.display = 'none';
             scanOverlay.classList.add('visible');
-          }, 800);
+            
+            // 3. 延遲 1 秒後才開始下載第一個模型，確保音樂頻寬優先
+            const appManager = scene.components['app-manager'];
+            if (appManager) {
+              console.log("Starting model sequence download...");
+              appManager.startLoadingSequence(); 
+            }
+          }, 1000); 
         });
       });
 
@@ -438,7 +444,7 @@
     <!-- 3. 辨識成功典雅文字 -->
     <div id="success-text">辨識成功</div>
 
-    <!-- 4. 左下方模型載入狀態 (新增) -->
+    <!-- 4. 左下方模型載入狀態 -->
     <div id="preload-status">模型資料載入中... (0/3)</div>
 
     <!-- 5. AR 場景 -->
@@ -450,7 +456,7 @@
       vr-mode-ui="enabled: false" 
       device-orientation-permission-ui="enabled: false"
       gesture-detector
-      app-manager> <!-- 綁定新的管理員 -->
+      app-manager> 
       
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
@@ -458,58 +464,52 @@
       <a-light type="directional" position="1 1 1" intensity="1.5"></a-light>
 
       <!-- 
-        Target A -> titan_model_A.glb 
-        【重要修正】使用 data-src，初始 src 為空，避免搶頻寬
+        Target A (模型A) 
+        使用 <a-entity gltf-model="..."> 並指定 dracoDecoderPath
       -->
       <a-entity mindar-image-target="targetIndex: 0" id="target-a">
-        <a-gltf-model 
+        <a-entity 
           id="model-a"
+          gltf-model="dracoDecoderPath: https://www.gstatic.com/draco/versioned/decoders/1.5.6/;" 
           data-src="./titan_model_A.glb" 
-          position="0 0 0" 
-          rotation="0 0 0" 
-          scale="0.5 0.5 0.5" 
-          class="clickable"
-          visible="false"
+          position="0 0 0" rotation="0 0 0" scale="0.5 0.5 0.5" 
+          class="clickable" visible="false"
           animation-mixer="clip: *; loop: repeat;"
           gesture-handler> 
-        </a-gltf-model>
+        </a-entity>
       </a-entity>
 
-      <!-- Target B -->
+      <!-- Target B (模型B) -->
       <a-entity mindar-image-target="targetIndex: 1" id="target-b">
-        <a-gltf-model 
+        <a-entity 
           id="model-b"
+          gltf-model="dracoDecoderPath: https://www.gstatic.com/draco/versioned/decoders/1.5.6/;"
           data-src="./titan_model_B.glb" 
-          position="0 0 0" 
-          rotation="0 0 0" 
-          scale="0.5 0.5 0.5" 
-          class="clickable"
-          visible="false"
+          position="0 0 0" rotation="0 0 0" scale="0.5 0.5 0.5" 
+          class="clickable" visible="false"
           animation-mixer="clip: *; loop: repeat;"
           gesture-handler> 
-        </a-gltf-model>
+        </a-entity>
       </a-entity>
 
-      <!-- Target C -->
+      <!-- Target C (模型C) -->
       <a-entity mindar-image-target="targetIndex: 2" id="target-c">
-        <a-gltf-model 
+        <a-entity 
           id="model-c"
+          gltf-model="dracoDecoderPath: https://www.gstatic.com/draco/versioned/decoders/1.5.6/;"
           data-src="./titan_model_C.glb" 
-          position="0 0 0" 
-          rotation="0 0 0" 
-          scale="0.5 0.5 0.5" 
-          class="clickable"
-          visible="false"
+          position="0 0 0" rotation="0 0 0" scale="0.5 0.5 0.5" 
+          class="clickable" visible="false"
           animation-mixer="clip: *; loop: repeat;"
           gesture-handler> 
-        </a-gltf-model>
+        </a-entity>
       </a-entity>
 
     </a-scene>
 
     <!-- 音效資源 -->
-    <audio id="bgm-audio" src="bgm.mp3" loop preload="metadata"></audio>
-    <audio id="sfx-spawn" src="spawn.mp3" preload="metadata"></audio>
+    <audio id="bgm-audio" src="bgm.mp3" loop preload="auto"></audio>
+    <audio id="sfx-spawn" src="spawn.mp3" preload="auto"></audio>
 
   </body>
 </html>
