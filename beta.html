@@ -5,7 +5,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <title>rniko 特製A賞特典</title>
     
-    <!-- 1. 核心庫 (維持穩定版 1.4.2 以對抗 iOS 記憶體壓力) -->
+    <!-- 1. 核心庫 (維持穩定版 1.4.2) -->
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
@@ -19,220 +19,238 @@
         touch-action: none; /* iOS 防滑動 */
       }
 
-      /* --- 1. 客製化 Loading 畫面 (初始進場用) --- */
+      /* --- Loading 畫面 --- */
       #custom-loading {
-        position: fixed;
-        top: 0; left: 0; width: 100%; height: 100%;
-        background: #000;
-        z-index: 99999;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: #000; z-index: 99999;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
         transition: opacity 0.8s ease-out;
       }
-      
       .loading-gif-container {
-        height: 55vh; 
-        aspect-ratio: 9/16; 
-        max-width: 90vw;
-        margin-bottom: 20px;
-        display: flex; align-items: center; justify-content: center;
-        background-color: rgba(255, 255, 255, 0.05);
-        border-radius: 15px; padding: 10px;
+        height: 55vh; aspect-ratio: 9/16; max-width: 90vw;
+        margin-bottom: 20px; display: flex; align-items: center; justify-content: center;
+        background-color: rgba(255, 255, 255, 0.05); border-radius: 15px; padding: 10px;
         position: relative; z-index: 0;
       }
-      
-      .loading-gif-container img {
-        width: 100%; height: 100%; object-fit: contain;
-      }
-
-      .loading-text, .progress-wrapper, #start-btn {
-        position: relative; z-index: 10;
-      }
-
+      .loading-gif-container img { width: 100%; height: 100%; object-fit: contain; }
+      .loading-text, .progress-wrapper, #start-btn { position: relative; z-index: 10; }
       .loading-text {
-        color: white; font-size: 20px; font-weight: bold;
-        margin-bottom: 20px; letter-spacing: 2px; text-align: center;
-        text-shadow: 0 0 10px rgba(255,255,255,0.5);
+        color: white; font-size: 20px; font-weight: bold; margin-bottom: 20px;
+        letter-spacing: 2px; text-align: center; text-shadow: 0 0 10px rgba(255,255,255,0.5);
       }
-
       .progress-wrapper {
-        width: 200px; height: 6px;
-        background: rgba(255, 255, 255, 0.2);
+        width: 200px; height: 6px; background: rgba(255, 255, 255, 0.2);
         border-radius: 3px; overflow: hidden;
       }
-
       .progress-bar {
         width: 0%; height: 100%; background: #fff;
-        box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
-        transition: width 0.3s ease;
+        box-shadow: 0 0 10px rgba(255, 255, 255, 0.8); transition: width 0.3s ease;
       }
-
       #start-btn {
         display: none; margin-top: 20px; padding: 12px 40px;
-        background: white; color: black; border: none;
-        border-radius: 30px; font-size: 18px; font-weight: bold;
-        cursor: pointer;
-        box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
-        animation: pulse 2s infinite;
+        background: white; color: black; border: none; border-radius: 30px;
+        font-size: 18px; font-weight: bold; cursor: pointer;
+        box-shadow: 0 0 15px rgba(255, 255, 255, 0.5); animation: pulse 2s infinite;
       }
-
       @keyframes pulse {
         0% { transform: scale(1); box-shadow: 0 0 10px rgba(255,255,255,0.5); }
         50% { transform: scale(1.05); box-shadow: 0 0 20px rgba(255,255,255,0.8); }
         100% { transform: scale(1); box-shadow: 0 0 10px rgba(255,255,255,0.5); }
       }
 
-      /* --- 2. 掃描對焦框 UI --- */
+      /* --- 掃描對焦框 UI (含特效樣式) --- */
       #scan-overlay {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         z-index: 100; pointer-events: none;
-        display: flex; flex-direction: column;
-        align-items: center; justify-content: center;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
         transition: opacity 0.5s ease; opacity: 0; 
       }
-
       #scan-overlay.hidden { opacity: 0 !important; }
       #scan-overlay.visible { opacity: 1; }
 
       .scan-reticle {
-        width: 60vw; height: 60vw;
-        max-width: 300px; max-height: 300px;
-        border: 2px dashed rgba(255, 255, 255, 0.5);
-        border-radius: 20px;
-        box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+        width: 60vw; height: 60vw; max-width: 300px; max-height: 300px;
+        border: 2px dashed rgba(255, 255, 255, 0.5); border-radius: 20px;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.3); transition: all 0.3s ease;
       }
+      /* 辨識成功時的閃爍特效 */
+      .scan-reticle.success-flash {
+        border-color: #ffd700; /* 金色 */
+        border-style: solid;
+        border-width: 4px;
+        box-shadow: 0 0 30px #ffd700, inset 0 0 20px #ffd700;
+        animation: flashBorder 0.5s infinite alternate;
+      }
+      @keyframes flashBorder {
+        from { opacity: 1; transform: scale(1); }
+        to { opacity: 0.7; transform: scale(1.05); }
+      }
+
+      .scan-reticle::before, .scan-reticle::after {
+        content: ''; position: absolute; width: 20px; height: 20px;
+        border-color: white; border-style: solid; opacity: 0.8;
+      }
+      .scan-reticle::before { top: -2px; left: -2px; border-width: 4px 0 0 4px; border-radius: 4px 0 0 0; }
+      .scan-reticle::after { bottom: -2px; right: -2px; border-width: 0 4px 4px 0; border-radius: 0 0 4px 0; }
 
       .scan-prompt {
-        margin-top: 15px;
-        color: rgba(255, 255, 255, 0.9);
+        margin-top: 15px; color: rgba(255, 255, 255, 0.9);
         font-size: 14px; letter-spacing: 1px;
-        text-shadow: 0 0 5px black;
-        background: rgba(0,0,0,0.6); padding: 8px 16px; border-radius: 20px;
+        text-shadow: 0 0 5px black; background: rgba(0,0,0,0.6);
+        padding: 8px 16px; border-radius: 20px; transition: opacity 0.3s;
       }
 
-      /* --- 3. 模型下載中提示 (Strategy B 核心) --- */
-      #download-status {
-        position: fixed; bottom: 10%; left: 50%; transform: translateX(-50%);
-        background: rgba(0, 0, 0, 0.8); color: white;
-        padding: 10px 20px; border-radius: 30px;
-        font-size: 14px; display: flex; align-items: center; gap: 10px;
-        z-index: 200; opacity: 0; pointer-events: none; transition: opacity 0.3s;
+      /* --- 辨識成功典雅文字 --- */
+      #success-text {
+        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        font-family: 'Times New Roman', serif; /* 襯線體，典雅感 */
+        font-size: 32px; font-weight: bold; color: #ffd700; /* 金色 */
+        text-shadow: 0 0 10px #ffd700, 0 0 20px #ff8c00; /* 光暈 */
+        opacity: 0; pointer-events: none; z-index: 150;
+        letter-spacing: 5px; white-space: nowrap;
       }
-      #download-status.show { opacity: 1; }
-      
-      /* 轉圈圈動畫 */
-      .spinner {
-        width: 16px; height: 16px;
-        border: 2px solid #fff; border-top-color: transparent;
-        border-radius: 50%; animation: spin 1s linear infinite;
+      #success-text.show {
+        animation: textFadeInUp 1s ease forwards;
       }
-      @keyframes spin { to { transform: rotate(360deg); } }
+      @keyframes textFadeInUp {
+        0% { opacity: 0; transform: translate(-50%, -30%); }
+        100% { opacity: 1; transform: translate(-50%, -50%); }
+      }
+
+      /* --- 左下方模型載入狀態列 --- */
+      #preload-status {
+        position: fixed; bottom: 20px; left: 20px;
+        background: rgba(0, 0, 0, 0.6); color: rgba(255,255,255,0.8);
+        padding: 8px 15px; border-radius: 8px;
+        font-size: 12px; font-family: monospace;
+        z-index: 200; border-left: 3px solid #aaa;
+        transition: all 0.5s; pointer-events: none;
+      }
+      #preload-status.complete {
+        border-left-color: #00ff00; color: #fff;
+        text-shadow: 0 0 5px #00ff00;
+      }
 
       .a-enter-vr-button, .a-loader-title { display: none !important; }
     </style>
 
     <script>
-      // --- 模型載入狀態管理元件 ---
-      AFRAME.registerComponent('model-loader-manager', {
+      // --- 模型載入與特效管理元件 ---
+      AFRAME.registerComponent('app-manager', {
         init: function() {
-          this.downloadStatus = document.getElementById('download-status');
+          this.preloadStatus = document.getElementById('preload-status');
+          this.scanOverlay = document.getElementById('scan-overlay');
+          this.reticle = document.querySelector('.scan-reticle');
+          this.prompt = document.querySelector('.scan-prompt');
+          this.successText = document.getElementById('success-text');
           this.sfx = document.querySelector('#sfx-spawn');
           
-          // 為每個 target 綁定事件
-          const targets = document.querySelectorAll('[mindar-image-target]');
-          
-          targets.forEach(target => {
-            const model = target.querySelector('a-gltf-model');
-            
-            // 標記模型是否已下載完成
-            model.dataset.loaded = 'false';
+          this.totalModels = 3;
+          this.loadedCount = 0;
+          this.isRecognitionLocked = false; // 防止重複觸發特效
 
-            // 監聽模型下載完成事件 (A-Frame 內建事件)
+          // 1. 綁定模型載入事件 (計數器邏輯)
+          const models = document.querySelectorAll('a-gltf-model');
+          models.forEach(model => {
             model.addEventListener('model-loaded', () => {
-              console.log(`Model loaded: ${model.id}`);
-              model.dataset.loaded = 'true';
-              
-              // 如果目前正在掃描這個目標，隱藏下載提示並顯示模型
-              if (target.object3D.visible) {
-                this.hideDownloadStatus();
-                this.showModel(model);
-              }
+              this.loadedCount++;
+              this.updateStatusUI();
             });
+            // 如果模型有快取瞬間載入，可能不會觸發 listener，這裡做個保險
+            if (model.components.gltf - model && model.components.gltf - model.model) {
+                 this.loadedCount++;
+                 this.updateStatusUI();
+            }
+          });
 
-            // 監聽掃描到目標
+          // 2. 綁定辨識事件
+          const targets = document.querySelectorAll('[mindar-image-target]');
+          targets.forEach(target => {
             target.addEventListener('targetFound', () => {
-              // 1. 隱藏掃描框
-              document.getElementById('scan-overlay').classList.add('hidden');
-
-              // 2. 檢查模型是否已下載
-              if (model.dataset.loaded === 'true') {
-                // 已下載：直接顯示
-                this.showModel(model);
-              } else {
-                // 未下載：顯示「下載中」提示
-                this.showDownloadStatus();
-                // 確保模型暫時不可見，避免閃爍
-                model.setAttribute('visible', false);
-              }
+              if (this.isRecognitionLocked) return; // 避免特效重疊
+              
+              this.triggerSuccessEffect(target);
             });
 
-            // 監聽目標丟失
             target.addEventListener('targetLost', () => {
-              // 隱藏下載提示 (因為沒在看了)
-              this.hideDownloadStatus();
-              
-              // 檢查是否所有目標都丟失，決定是否顯示掃描框
-              this.checkAllTargetsLost();
+               // 只有當所有目標都丟失，且特效沒在跑時，才顯示掃描框
+               setTimeout(() => {
+                 if (!this.isAnyTargetVisible() && !this.isRecognitionLocked) {
+                   this.scanOverlay.classList.remove('hidden');
+                   this.scanOverlay.classList.add('visible');
+                   this.reticle.classList.remove('success-flash'); // 重置樣式
+                 }
+               }, 500);
             });
           });
         },
 
-        showDownloadStatus: function() {
-          if (this.downloadStatus) this.downloadStatus.classList.add('show');
-        },
-
-        hideDownloadStatus: function() {
-          if (this.downloadStatus) this.downloadStatus.classList.remove('show');
-        },
-
-        showModel: function(model) {
-          // 確保模型可見
-          model.setAttribute('visible', true);
+        updateStatusUI: function() {
+          if (this.loadedCount > this.totalModels) this.loadedCount = this.totalModels;
+          this.preloadStatus.innerText = `模型資料載入中... (${this.loadedCount}/${this.totalModels})`;
           
-          // 播放音效
+          if (this.loadedCount === this.totalModels) {
+            this.preloadStatus.innerText = `資源準備就緒 (${this.loadedCount}/${this.totalModels})`;
+            this.preloadStatus.classList.add('complete');
+            // 3秒後淡出
+            setTimeout(() => { this.preloadStatus.style.opacity = '0'; }, 3000);
+          }
+        },
+
+        triggerSuccessEffect: function(target) {
+          this.isRecognitionLocked = true; // 鎖定特效播放中
+
+          // A. 視覺特效：掃描框變金色閃爍
+          this.reticle.classList.add('success-flash');
+          this.prompt.style.opacity = '0'; // 隱藏提示字
+          
+          // B. 顯示典雅文字
+          this.successText.classList.add('show');
+
+          // C. 播放音效
           if(this.sfx) {
              this.sfx.currentTime = 0;
              const p = this.sfx.play();
              if(p !== undefined) p.catch(()=>{});
           }
 
-          // 播放登場動畫
-          model.removeAttribute('animation__spawn');
-          model.setAttribute('animation__spawn', {
-            property: 'scale',
-            from: '0 0 0',
-            to: '0.5 0.5 0.5', 
-            dur: 800,
-            easing: 'easeOutElastic'
-          });
+          // D. 延遲 1.5 秒後才顯示模型 (讓使用者看完特效)
+          setTimeout(() => {
+            // 隱藏掃描UI
+            this.scanOverlay.classList.remove('visible');
+            this.scanOverlay.classList.add('hidden');
+            this.successText.classList.remove('show');
+            
+            // 顯示模型
+            const model = target.querySelector('a-gltf-model');
+            if(model) {
+              model.setAttribute('visible', true);
+              model.removeAttribute('animation__spawn');
+              model.setAttribute('animation__spawn', {
+                property: 'scale',
+                from: '0 0 0',
+                to: '0.5 0.5 0.5', 
+                dur: 800,
+                easing: 'easeOutElastic'
+              });
+            }
+            
+            // 解鎖
+            this.isRecognitionLocked = false;
+          }, 1500);
         },
 
-        checkAllTargetsLost: function() {
+        isAnyTargetVisible: function() {
           const targets = document.querySelectorAll('[mindar-image-target]');
-          let anyVisible = false;
+          let visible = false;
           targets.forEach(t => {
-            if (t.object3D.visible) anyVisible = true;
+            if (t.object3D.visible) visible = true;
           });
-          
-          if (!anyVisible) {
-            document.getElementById('scan-overlay').classList.remove('hidden');
-          }
+          return visible;
         }
       });
 
-      // --- 頁面邏輯 ---
+      // --- 頁面與 Loading 邏輯 ---
       document.addEventListener("DOMContentLoaded", function() {
         const scene = document.querySelector('a-scene');
         const loader = document.querySelector('#custom-loading');
@@ -273,7 +291,7 @@
         });
       });
 
-      // --- 手勢組件 (維持不變) ---
+      // --- 手勢組件 ---
       AFRAME.registerComponent("gesture-detector", {
         schema: { element: { default: "" } },
         init: function() {
@@ -380,14 +398,14 @@
       <div class="scan-reticle"></div>
       <div class="scan-prompt">請從特典卡牌找尋目標</div>
     </div>
+    
+    <!-- 3. 辨識成功典雅文字 -->
+    <div id="success-text">辨識成功</div>
 
-    <!-- 3. 下載狀態提示 (新增) -->
-    <div id="download-status">
-      <div class="spinner"></div>
-      <div>模型資料下載中...</div>
-    </div>
+    <!-- 4. 左下方模型載入狀態 (新增) -->
+    <div id="preload-status">模型資料載入中... (0/3)</div>
 
-    <!-- 4. AR 場景 -->
+    <!-- 5. AR 場景 -->
     <a-scene 
       mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.001; uiScanning: no; uiLoading: no;" 
       loading-screen="enabled: false"
@@ -396,14 +414,18 @@
       vr-mode-ui="enabled: false" 
       device-orientation-permission-ui="enabled: false"
       gesture-detector
-      model-loader-manager> <!-- 綁定下載管理員 -->
+      app-manager> <!-- 綁定新的管理員 -->
       
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
       <a-light type="ambient" intensity="1"></a-light>
       <a-light type="directional" position="1 1 1" intensity="1.5"></a-light>
 
-      <!-- Target A -> titan_model_A.glb -->
+      <!-- 
+        Target A -> titan_model_A.glb 
+        注意：這裡移除了 visible="false"，改為預設隱藏交給 JS 控制，
+        且 src 存在就會開始在背景下載 (Preload)
+      -->
       <a-entity mindar-image-target="targetIndex: 0" id="target-a">
         <a-gltf-model 
           id="model-a"
@@ -418,7 +440,7 @@
         </a-gltf-model>
       </a-entity>
 
-      <!-- Target B -> titan_model_B.glb -->
+      <!-- Target B -->
       <a-entity mindar-image-target="targetIndex: 1" id="target-b">
         <a-gltf-model 
           id="model-b"
@@ -433,7 +455,7 @@
         </a-gltf-model>
       </a-entity>
 
-      <!-- Target C -> titan_model_C.glb -->
+      <!-- Target C -->
       <a-entity mindar-image-target="targetIndex: 2" id="target-c">
         <a-gltf-model 
           id="model-c"
