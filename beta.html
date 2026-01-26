@@ -25,18 +25,39 @@
         transition: opacity 0.8s ease-out;
       }
       .loading-gif-container {
-        /* 尺寸加大至 70vh，讓跳舞更清楚 */
+        /* 尺寸加大至 70vh */
         height: 70vh; aspect-ratio: 9/16; max-width: 95vw;
         margin-bottom: 20px; display: flex; align-items: center; justify-content: center;
         background-color: rgba(255, 255, 255, 0.05); border-radius: 15px; padding: 10px;
         position: relative; z-index: 0;
       }
       .loading-gif-container img { width: 100%; height: 100%; object-fit: contain; }
-      .loading-text, .progress-wrapper, #start-btn { position: relative; z-index: 10; }
-      .loading-text {
-        color: white; font-size: 20px; font-weight: bold; margin-bottom: 20px;
-        letter-spacing: 2px; text-align: center; text-shadow: 0 0 10px rgba(255,255,255,0.5);
+      
+      /* UI 層級設定 */
+      .loading-text, .progress-wrapper, #start-btn, .loading-subtext { 
+        position: relative; z-index: 10; 
       }
+
+      /* --- 標題文字特效 (可愛跳動版) --- */
+      .loading-text {
+        color: white; font-size: 22px; font-weight: bold; margin-bottom: 15px;
+        letter-spacing: 2px; text-align: center;
+        /* 粉色系光暈，增加可愛感 */
+        text-shadow: 0 0 10px #ff9a9e, 0 0 20px #ff69b4;
+        /* 跳動動畫 */
+        animation: cuteBounce 1s infinite ease-in-out;
+      }
+      @keyframes cuteBounce {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-8px); } /* 輕微上跳 */
+      }
+
+      /* --- 底部補充說明文字 --- */
+      .loading-subtext {
+        font-size: 12px; color: rgba(255, 255, 255, 0.6);
+        margin-top: 15px; letter-spacing: 1px;
+      }
+
       .progress-wrapper {
         width: 200px; height: 6px; background: rgba(255, 255, 255, 0.2);
         border-radius: 3px; overflow: hidden;
@@ -44,7 +65,6 @@
       .progress-bar {
         width: 0%; height: 100%; background: #fff;
         box-shadow: 0 0 10px rgba(255, 255, 255, 0.8); 
-        /* 移除 transition，改由 JS 控制每一幀 */
       }
       #start-btn {
         display: none; margin-top: 20px; padding: 12px 40px;
@@ -236,14 +256,14 @@
         const errorMsg = document.querySelector('#error-msg');
         const scanOverlay = document.querySelector('#scan-overlay'); 
         const bgm = document.querySelector('#bgm-audio');
+        const subtext = document.querySelector('.loading-subtext'); // 底部文字
         
-        // --- 核心修正：強制 20 秒計時器邏輯 ---
+        // --- 強制 20 秒計時器邏輯 ---
         const MIN_LOAD_TIME = 20000; // 20 秒
         const startTime = Date.now();
         let isArReady = false;
         let isTimeUp = false;
 
-        // 進度條計時器
         const interval = setInterval(() => {
           const elapsed = Date.now() - startTime;
           let percent = (elapsed / MIN_LOAD_TIME) * 100;
@@ -252,17 +272,15 @@
             percent = 100;
             isTimeUp = true;
             clearInterval(interval);
-            checkReadyState(); // 時間到，檢查是否可以顯示按鈕
+            checkReadyState();
           }
-          
           progressBar.style.width = percent + '%';
-        }, 50); // 每 50ms 更新一次
+        }, 50); 
 
-        // AR 系統就緒監聽
         scene.addEventListener('arReady', () => {
           console.log("AR System Ready (Waiting for timer...)");
           isArReady = true;
-          checkReadyState(); // 系統好了，檢查時間到了沒
+          checkReadyState(); 
         });
 
         scene.addEventListener('arError', (event) => {
@@ -272,21 +290,19 @@
           errorMsg.innerText = '系統載入失敗，請檢查網路或重新整理';
         });
 
-        // 檢查是否顯示「開始體驗」按鈕
         function checkReadyState() {
-          // 必須同時滿足：1. 時間跑滿 20秒  2. AR 系統已就緒
           if (isTimeUp && isArReady) {
             progressWrapper.style.display = 'none';
+            subtext.style.display = 'none'; // 隱藏等待提示
             startBtn.style.display = 'block';
           }
         }
 
         startBtn.addEventListener('click', () => {
-          // 點擊開始：優先播放音樂
           if(bgm) { 
             bgm.volume = 0.5;
             const p = bgm.play();
-            if (p !== undefined) { p.catch(e => { console.log("BGM playback error", e); }); }
+            if (p !== undefined) { p.catch(e => { console.log("BGM play failed", e); }); }
           }
 
           loader.style.opacity = '0';
@@ -393,8 +409,15 @@
       <div class="loading-gif-container">
         <img src="./loading.gif" alt="Loading Animation" loading="eager" onerror="this.onerror=null; this.src='https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3pueXAxZnl4Y3R6Y3I4Z3R6Y3I4Z3R6eSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9cw/L0ZnJk3x7yT8G2yqX/giphy.gif';">
       </div>
+      
+      <!-- 可愛跳動標題 -->
       <div class="loading-text">rniko 特製A賞特典</div>
+      
       <div class="progress-wrapper"><div class="progress-bar"></div></div>
+      
+      <!-- 底部補充說明 -->
+      <div class="loading-subtext">模型檔案較大，請耐心等候唷~</div>
+      
       <button id="start-btn">開始體驗</button>
       <div id="error-msg"></div>
     </div>
@@ -423,8 +446,7 @@
       <a-light type="ambient" intensity="1"></a-light>
       <a-light type="directional" position="1 1 1" intensity="1.5"></a-light>
 
-      <!-- 平行下載：直接將 src 寫在屬性中 -->
-      <!-- 啟用 Draco：加入 dracoDecoderPath -->
+      <!-- 平行下載 & Draco -->
       
       <!-- Target A -->
       <a-entity mindar-image-target="targetIndex: 0" id="target-a">
