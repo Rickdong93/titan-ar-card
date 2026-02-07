@@ -25,6 +25,10 @@
         background: #000; z-index: 99999;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
         transition: opacity 0.8s ease-out;
+        /* 新增：讓 iOS Safari 知道這是可點擊區域，確保 click 事件觸發 */
+        cursor: pointer;
+        /* 移除點擊時的高亮藍色區塊 (iOS 特性) */
+        -webkit-tap-highlight-color: transparent;
       }
       .loading-gif-container {
         /* 尺寸加大至 70vh */
@@ -286,8 +290,7 @@
         let lastTap = 0;
         let isAltGif = false; // 目前是否顯示第二張
 
-        // 綁定點擊事件到整個 loading 畫面 (除了按鈕)
-        loader.addEventListener('touchstart', handleDoubleTap);
+        // [修正] 只保留 click 事件，移除 touchstart 以避免 iOS 上的 Ghost Click 衝突
         loader.addEventListener('click', handleDoubleTap);
 
         function handleDoubleTap(e) {
