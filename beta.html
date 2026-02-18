@@ -5,6 +5,13 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <title>rniko 特製A賞特典</title>
     
+    <!-- 
+      【優先載入 GIF】
+      確保第二張 GIF 在切換時已經準備好，不會延遲。
+    -->
+    <link rel="preload" href="./loading.gif" as="image">
+    <link rel="preload" href="./loading_2.gif" as="image">
+
     <!-- 1. 核心庫 (維持 A-Frame 1.4.2 穩定版) -->
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
@@ -15,6 +22,7 @@
         margin: 0; overflow: hidden;
         font-family: 'Microsoft JhengHei', sans-serif;
         background-color: black; touch-action: none;
+        user-select: none; -webkit-user-select: none;
       }
 
       /* --- Loading 畫面 --- */
@@ -23,18 +31,22 @@
         background: #000; z-index: 99999;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
         transition: opacity 0.8s ease-out;
+        cursor: pointer; -webkit-tap-highlight-color: transparent;
       }
       .loading-gif-container {
         height: 70vh; aspect-ratio: 9/16; max-width: 95vw;
         margin-bottom: 20px; display: flex; align-items: center; justify-content: center;
         background-color: rgba(255, 255, 255, 0.05); border-radius: 15px; padding: 10px;
         position: relative; z-index: 0;
+        transition: transform 0.2s;
       }
-      .loading-gif-container img { width: 100%; height: 100%; object-fit: contain; }
+      .loading-gif-container.swap-anim { transform: scale(0.95); }
+      .loading-gif-container img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
       
       .loading-text, .progress-wrapper, #start-btn, .loading-subtext { 
-        position: relative; z-index: 10; 
+        position: relative; z-index: 10; pointer-events: none; 
       }
+      #start-btn { pointer-events: auto !important; }
 
       .loading-text {
         color: white; font-size: 22px; font-weight: bold; margin-bottom: 15px;
@@ -114,16 +126,11 @@
         padding: 8px 16px; border-radius: 20px; transition: opacity 0.3s;
       }
 
-      /* --- 辨識成功特效文字 (改為英文典雅風格) --- */
+      /* --- 辨識成功特效文字 --- */
       #success-text {
         position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-        /* 襯線體，典雅感 */
-        font-family: 'Times New Roman', serif; 
-        font-size: 28px; /* 稍微調整字體大小 */
-        font-weight: bold; color: #ffd700;
-        /* 金色光暈 */
-        text-shadow: 0 0 10px #ffd700, 0 0 20px #ff8c00; 
-        opacity: 0; pointer-events: none; z-index: 150;
+        font-family: 'Times New Roman', serif; font-size: 28px; font-weight: bold; color: #ffd700;
+        text-shadow: 0 0 10px #ffd700, 0 0 20px #ff8c00; opacity: 0; pointer-events: none; z-index: 150;
         letter-spacing: 3px; white-space: nowrap;
       }
       #success-text.show { animation: textFadeInUp 1s ease forwards; }
@@ -132,21 +139,16 @@
         100% { opacity: 1; transform: translate(-50%, -50%); }
       }
 
-      /* --- 左下方狀態列 (雙重顯示) --- */
+      /* --- 左下方狀態列 --- */
       #status-panel {
         position: fixed; bottom: 20px; left: 20px;
         background: rgba(0, 0, 0, 0.6); color: rgba(255,255,255,0.8);
         padding: 10px 15px; border-radius: 8px;
         font-size: 12px; font-family: monospace;
         z-index: 200; border-left: 3px solid #aaa;
-        pointer-events: none;
-        line-height: 1.6; /* 增加行距 */
+        pointer-events: none; line-height: 1.6;
       }
-      /* 完成時的樣式 (綠色提示) */
-      .status-line.complete {
-        color: #00ff00;
-        text-shadow: 0 0 5px #00ff00;
-      }
+      .status-line.complete { color: #00ff00; text-shadow: 0 0 5px #00ff00; }
 
       .a-enter-vr-button, .a-loader-title { display: none !important; }
     </style>
@@ -165,10 +167,10 @@
           
           this.totalModels = 3;
           this.loadedCount = 0;
-          this.foundSet = new Set(); // 使用 Set 來記錄已解鎖的 Target ID，避免重複計算
+          this.foundSet = new Set(); 
           this.isRecognitionLocked = false; 
 
-          // 1. 監聽模型載入
+          // 1. 監聽模型載入 (平行下載)
           const models = document.querySelectorAll('a-entity[gltf-model]');
           models.forEach(model => {
             model.addEventListener('model-loaded', () => {
@@ -182,12 +184,10 @@
           const targets = document.querySelectorAll('[mindar-image-target]');
           targets.forEach(target => {
             target.addEventListener('targetFound', () => {
-              // 記錄解鎖進度
               if (!this.foundSet.has(target.id)) {
                 this.foundSet.add(target.id);
                 this.updateStatusUI();
               }
-
               if (this.isRecognitionLocked) return; 
               this.triggerSuccessEffect(target);
             });
@@ -202,35 +202,40 @@
                }, 500);
             });
           });
-          
-          // 初始化 UI
           this.updateStatusUI();
         },
 
+        // --- 狀態顯示邏輯 (隱藏版) ---
         updateStatusUI: function() {
-          // 更新載入進度文字
+          const displayTotal = 2; // 前端只顯示 2 個
+
+          // 1. 資源載入顯示：即便 loadedCount 到了 3，顯示也不超過 2
+          const loadedDisplay = Math.min(this.loadedCount, displayTotal);
+          
           const loadText = document.getElementById('resource-status');
-          if (this.loadedCount >= this.totalModels) {
-            loadText.innerText = `資源載入成功 (${this.totalModels}/${this.totalModels})`;
+          if (loadedDisplay >= displayTotal) {
+            loadText.innerText = `資源載入成功 (${displayTotal}/${displayTotal})`;
             loadText.classList.add('complete');
           } else {
-            loadText.innerText = `資源載入中... (${this.loadedCount}/${this.totalModels})`;
+            loadText.innerText = `資源載入中... (${loadedDisplay}/${displayTotal})`;
           }
 
-          // 更新解鎖進度文字
+          // 2. 解鎖體驗顯示：只計算 Target A 和 Target B
+          let unlockedDisplay = 0;
+          if (this.foundSet.has('target-a')) unlockedDisplay++;
+          if (this.foundSet.has('target-b')) unlockedDisplay++;
+          
           const unlockText = document.getElementById('unlock-status');
-          const unlockedCount = this.foundSet.size;
-          if (unlockedCount >= this.totalModels) {
-            unlockText.innerText = `已解鎖體驗 (${unlockedCount}/${this.totalModels})`;
+          if (unlockedDisplay >= displayTotal) {
+            unlockText.innerText = `已解鎖體驗 (${displayTotal}/${displayTotal})`;
             unlockText.classList.add('complete');
           } else {
-            unlockText.innerText = `已解鎖體驗 (${unlockedCount}/${this.totalModels})`;
+            unlockText.innerText = `已解鎖體驗 (${unlockedDisplay}/${displayTotal})`;
           }
         },
 
         triggerSuccessEffect: function(target) {
           this.isRecognitionLocked = true; 
-
           this.reticle.classList.add('success-flash');
           this.prompt.style.opacity = '0'; 
           this.successText.classList.add('show');
@@ -283,8 +288,38 @@
         const bgm = document.querySelector('#bgm-audio');
         const subtext = document.querySelector('.loading-subtext'); 
         
+        // --- 雙擊切換 GIF 邏輯 ---
+        const gifContainer = document.querySelector('.loading-gif-container');
+        const gifImage = gifContainer.querySelector('img');
+        let lastTap = 0;
+        let isAltGif = false; 
+
+        // 只保留 click 避免 iOS Ghost Click
+        loader.addEventListener('click', handleDoubleTap);
+
+        function handleDoubleTap(e) {
+          if (e.target === startBtn) return;
+
+          const currentTime = new Date().getTime();
+          const tapLength = currentTime - lastTap;
+          
+          if (tapLength < 300 && tapLength > 0) {
+            isAltGif = !isAltGif;
+            gifContainer.classList.add('swap-anim');
+            setTimeout(() => gifContainer.classList.remove('swap-anim'), 200);
+
+            if (isAltGif) {
+              gifImage.src = './loading_2.gif';
+            } else {
+              gifImage.src = './loading.gif';
+            }
+            e.preventDefault(); 
+          }
+          lastTap = currentTime;
+        }
+
         // --- 強制 20 秒計時器邏輯 ---
-        const MIN_LOAD_TIME = 20000; // 20 秒
+        const MIN_LOAD_TIME = 20000; 
         const startTime = Date.now();
         let isArReady = false;
         let isTimeUp = false;
@@ -303,7 +338,7 @@
         }, 50); 
 
         scene.addEventListener('arReady', () => {
-          console.log("AR System Ready (Waiting for timer...)");
+          console.log("AR System Ready");
           isArReady = true;
           checkReadyState(); 
         });
@@ -318,7 +353,7 @@
         function checkReadyState() {
           if (isTimeUp && isArReady) {
             progressWrapper.style.display = 'none';
-            subtext.style.display = 'none'; // 隱藏等待提示
+            subtext.style.display = 'none'; 
             startBtn.style.display = 'block';
           }
         }
@@ -432,6 +467,7 @@
   <body>
     <div id="custom-loading">
       <div class="loading-gif-container">
+        <!-- 預設顯示第一張 GIF -->
         <img src="./loading.gif" alt="Loading Animation" loading="eager" onerror="this.onerror=null; this.src='https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3pueXAxZnl4Y3R6Y3I4Z3R6Y3I4Z3R6eSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9cw/L0ZnJk3x7yT8G2yqX/giphy.gif';">
       </div>
       
@@ -455,13 +491,14 @@
       <div class="scan-prompt">請從特典卡牌找尋目標</div>
     </div>
     
-    <!-- 辨識成功文字 (英文典雅版) -->
+    <!-- 辨識成功文字 -->
     <div id="success-text">TARGET ACQUIRED</div>
 
-    <!-- 左下方狀態面板 (雙行顯示) -->
+    <!-- 左下方狀態面板 (隱藏版計數) -->
     <div id="status-panel">
-      <div id="resource-status" class="status-line">資源載入中... (0/3)</div>
-      <div id="unlock-status" class="status-line">已解鎖體驗 (0/3)</div>
+      <!-- 初始顯示 0/2 -->
+      <div id="resource-status" class="status-line">資源載入中... (0/2)</div>
+      <div id="unlock-status" class="status-line">已解鎖體驗 (0/2)</div>
     </div>
 
     <!-- AR 場景 -->
@@ -482,7 +519,7 @@
 
       <!-- 平行下載 & Draco -->
       
-      <!-- Target A -->
+      <!-- Target A (計算) -->
       <a-entity mindar-image-target="targetIndex: 0" id="target-a">
         <a-entity 
           id="model-a"
@@ -494,7 +531,7 @@
         </a-entity>
       </a-entity>
 
-      <!-- Target B -->
+      <!-- Target B (計算) -->
       <a-entity mindar-image-target="targetIndex: 1" id="target-b">
         <a-entity 
           id="model-b"
@@ -506,7 +543,7 @@
         </a-entity>
       </a-entity>
 
-      <!-- Target C -->
+      <!-- Target C (隱藏版，不計入UI顯示) -->
       <a-entity mindar-image-target="targetIndex: 2" id="target-c">
         <a-entity 
           id="model-c"
