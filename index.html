@@ -288,23 +288,24 @@
         const bgm = document.querySelector('#bgm-audio');
         const subtext = document.querySelector('.loading-subtext'); 
         
-        // --- 雙擊切換 GIF 邏輯 ---
+        // --- 長按 3 秒切換 GIF 邏輯 ---
         const gifContainer = document.querySelector('.loading-gif-container');
         const gifImage = gifContainer.querySelector('img');
-        let lastTap = 0;
         let isAltGif = false; 
+        let pressTimer = null;
 
-        // 只使用 click 事件，避免手機上 Ghost Click 衝突
-        loader.addEventListener('click', handleDoubleTap);
-
-        function handleDoubleTap(e) {
+        function startPress(e) {
+          // 如果點到開始按鈕，不觸發長按邏輯
           if (e.target === startBtn) return;
 
-          const currentTime = new Date().getTime();
-          const tapLength = currentTime - lastTap;
+          // 每次按壓前先清除舊的計時器
+          clearTimeout(pressTimer);
           
-          if (tapLength < 300 && tapLength > 0) {
+          // 設定 3 秒 (3000 毫秒) 後觸發切換
+          pressTimer = setTimeout(() => {
             isAltGif = !isAltGif;
+            
+            // 視覺回饋：稍微縮放一下
             gifContainer.classList.add('swap-anim');
             setTimeout(() => gifContainer.classList.remove('swap-anim'), 200);
 
@@ -313,10 +314,22 @@
             } else {
               gifImage.src = './loading.gif';
             }
-            e.preventDefault(); 
-          }
-          lastTap = currentTime;
+          }, 3000); 
         }
+
+        function cancelPress() {
+          // 如果在 3 秒內放開，就取消計時器
+          clearTimeout(pressTimer);
+        }
+
+        // 綁定觸控與滑鼠事件 (按住開始計時，放開或離開則取消)
+        loader.addEventListener('touchstart', startPress);
+        loader.addEventListener('touchend', cancelPress);
+        loader.addEventListener('touchcancel', cancelPress);
+        
+        loader.addEventListener('mousedown', startPress);
+        loader.addEventListener('mouseup', cancelPress);
+        loader.addEventListener('mouseleave', cancelPress);
 
         // --- 強制 20 秒計時器邏輯 ---
         const MIN_LOAD_TIME = 20000; 
