@@ -5,15 +5,11 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <title>rniko 特製A賞特典</title>
     
-    <!-- 
-      【關鍵修正：優先載入 GIF】
-      這兩行指令會強迫瀏覽器在解析其他腳本前，優先下載這兩張圖片。
-      確保第二張 GIF 在切換時已經準備好，不會延遲。
-    -->
+    <!-- 優先載入 GIF，確保切換流暢 -->
     <link rel="preload" href="./loading.gif" as="image">
     <link rel="preload" href="./loading_2.gif" as="image">
 
-    <!-- 1. 核心庫 (維持 A-Frame 1.4.2 穩定版) -->
+    <!-- 1. 核心庫 (維持穩定版 1.4.2) -->
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
@@ -23,8 +19,7 @@
         margin: 0; overflow: hidden;
         font-family: 'Microsoft JhengHei', sans-serif;
         background-color: black; touch-action: none;
-        user-select: none; /* 防止雙擊選取文字 */
-        -webkit-user-select: none;
+        user-select: none; -webkit-user-select: none;
       }
 
       /* --- Loading 畫面 --- */
@@ -33,33 +28,23 @@
         background: #000; z-index: 99999;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
         transition: opacity 0.8s ease-out;
-        /* iOS Safari 點擊優化 */
-        cursor: pointer;
-        -webkit-tap-highlight-color: transparent;
+        cursor: pointer; -webkit-tap-highlight-color: transparent;
       }
       .loading-gif-container {
-        /* 尺寸加大至 70vh */
         height: 70vh; aspect-ratio: 9/16; max-width: 95vw;
         margin-bottom: 20px; display: flex; align-items: center; justify-content: center;
         background-color: rgba(255, 255, 255, 0.05); border-radius: 15px; padding: 10px;
         position: relative; z-index: 0;
-        transition: transform 0.2s; /* 切換時的動畫過渡 */
+        transition: transform 0.2s;
       }
-      /* 切換時的彈跳動畫 */
-      .loading-gif-container.swap-anim {
-        transform: scale(0.95);
-      }
-
+      .loading-gif-container.swap-anim { transform: scale(0.95); }
       .loading-gif-container img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
       
-      /* UI 層級設定 */
       .loading-text, .progress-wrapper, #start-btn, .loading-subtext { 
         position: relative; z-index: 10; pointer-events: none; 
       }
-      /* 讓按鈕可以被點擊 */
       #start-btn { pointer-events: auto !important; }
 
-      /* --- 標題文字特效 --- */
       .loading-text {
         color: white; font-size: 22px; font-weight: bold; margin-bottom: 15px;
         letter-spacing: 2px; text-align: center;
@@ -71,7 +56,6 @@
         50% { transform: translateY(-8px); } 
       }
 
-      /* --- 底部補充說明文字 --- */
       .loading-subtext {
         font-size: 12px; color: rgba(255, 255, 255, 0.6);
         margin-top: 15px; letter-spacing: 1px; text-align: center;
@@ -178,12 +162,12 @@
           this.successText = document.getElementById('success-text');
           this.sfx = document.querySelector('#sfx-spawn');
           
-          this.totalModels = 3;
+          this.totalModels = 3; // 實際有3個
           this.loadedCount = 0;
           this.foundSet = new Set(); 
           this.isRecognitionLocked = false; 
 
-          // 1. 監聽模型載入
+          // 1. 監聽模型載入 (計數器)
           const models = document.querySelectorAll('a-entity[gltf-model]');
           models.forEach(model => {
             model.addEventListener('model-loaded', () => {
@@ -197,6 +181,7 @@
           const targets = document.querySelectorAll('[mindar-image-target]');
           targets.forEach(target => {
             target.addEventListener('targetFound', () => {
+              // 記錄解鎖 (不重複)
               if (!this.foundSet.has(target.id)) {
                 this.foundSet.add(target.id);
                 this.updateStatusUI();
@@ -215,25 +200,37 @@
                }, 500);
             });
           });
+          
+          // 初始化文字
           this.updateStatusUI();
         },
 
+        // --- 狀態顯示邏輯 (隱藏版：顯示上限為 2) ---
         updateStatusUI: function() {
+          const displayTotal = 2; // 前端顯示分母為 2
+
+          // 1. 資源載入顯示：取 loadedCount 與 2 的最小值
+          const loadedDisplay = Math.min(this.loadedCount, displayTotal);
+          
           const loadText = document.getElementById('resource-status');
-          if (this.loadedCount >= this.totalModels) {
-            loadText.innerText = `資源載入成功 (${this.totalModels}/${this.totalModels})`;
+          if (loadedDisplay >= displayTotal) {
+            loadText.innerText = `資源載入成功 (${displayTotal}/${displayTotal})`;
             loadText.classList.add('complete');
           } else {
-            loadText.innerText = `資源載入中... (${this.loadedCount}/${this.totalModels})`;
+            loadText.innerText = `資源載入中... (${loadedDisplay}/${displayTotal})`;
           }
 
+          // 2. 解鎖體驗顯示：只計算 target-a 和 target-b
+          let unlockedDisplay = 0;
+          if (this.foundSet.has('target-a')) unlockedDisplay++;
+          if (this.foundSet.has('target-b')) unlockedDisplay++;
+          
           const unlockText = document.getElementById('unlock-status');
-          const unlockedCount = this.foundSet.size;
-          if (unlockedCount >= this.totalModels) {
-            unlockText.innerText = `已解鎖體驗 (${unlockedCount}/${this.totalModels})`;
+          if (unlockedDisplay >= displayTotal) {
+            unlockText.innerText = `已解鎖體驗 (${displayTotal}/${displayTotal})`;
             unlockText.classList.add('complete');
           } else {
-            unlockText.innerText = `已解鎖體驗 (${unlockedCount}/${this.totalModels})`;
+            unlockText.innerText = `已解鎖體驗 (${unlockedDisplay}/${displayTotal})`;
           }
         },
 
@@ -297,7 +294,7 @@
         let lastTap = 0;
         let isAltGif = false; 
 
-        // 只保留 click 避免 iOS Ghost Click
+        // 只使用 click 事件，避免手機上 Ghost Click 衝突
         loader.addEventListener('click', handleDoubleTap);
 
         function handleDoubleTap(e) {
@@ -341,7 +338,7 @@
         }, 50); 
 
         scene.addEventListener('arReady', () => {
-          console.log("AR System Ready (Waiting for timer...)");
+          console.log("AR System Ready");
           isArReady = true;
           checkReadyState(); 
         });
@@ -354,6 +351,7 @@
         });
 
         function checkReadyState() {
+          // 必須同時滿足：時間到 + AR引擎就緒
           if (isTimeUp && isArReady) {
             progressWrapper.style.display = 'none';
             subtext.style.display = 'none'; 
@@ -362,7 +360,6 @@
         }
 
         startBtn.addEventListener('click', () => {
-          // 點擊開始：優先播放音樂
           if(bgm) { 
             bgm.volume = 0.5;
             const p = bgm.play();
@@ -370,21 +367,10 @@
           }
 
           loader.style.opacity = '0';
-          
-          // 延遲 1 秒後才開始下載第一個模型 (確保音樂優先)
           setTimeout(() => {
             loader.style.display = 'none';
             scanOverlay.classList.add('visible');
-            
-            // 觸發模型下載序列
-            // 這裡會從第一個模型開始下載
-            const modelA = document.querySelector('#model-a');
-            const srcA = modelA.getAttribute('data-src');
-            if (srcA) {
-               console.log("Starting Model A Download...");
-               modelA.setAttribute('gltf-model', `src: url(${srcA}); dracoDecoderPath: https://www.gstatic.com/draco/versioned/decoders/1.5.6/;`);
-            }
-          }, 1000);
+          }, 800);
         });
       });
 
@@ -506,13 +492,14 @@
       <div class="scan-prompt">請從特典卡牌找尋目標</div>
     </div>
     
-    <!-- 辨識成功文字 (英文典雅版) -->
+    <!-- 辨識成功文字 -->
     <div id="success-text">TARGET ACQUIRED</div>
 
-    <!-- 左下方狀態面板 (雙行顯示) -->
+    <!-- 左下方狀態面板 (隱藏版計數 0/2) -->
     <div id="status-panel">
-      <div id="resource-status" class="status-line">資源載入中... (0/3)</div>
-      <div id="unlock-status" class="status-line">已解鎖體驗 (0/3)</div>
+      <!-- 初始顯示 0/2 -->
+      <div id="resource-status" class="status-line">資源載入中... (0/2)</div>
+      <div id="unlock-status" class="status-line">已解鎖體驗 (0/2)</div>
     </div>
 
     <!-- AR 場景 -->
@@ -531,13 +518,17 @@
       <a-light type="ambient" intensity="1"></a-light>
       <a-light type="directional" position="1 1 1" intensity="1.5"></a-light>
 
-      <!-- 平行下載 & Draco -->
+      <!-- 平行下載 & Draco & 預設隱藏 -->
+      <!-- 
+        重要：這裡使用了 src="url(...)"，這會告訴瀏覽器在解析 HTML 時就開始下載模型 (平行下載)。
+        即使 app-manager 還沒執行，下載也會在後台開始。
+      -->
       
-      <!-- Target A -->
+      <!-- Target A (計算) -->
       <a-entity mindar-image-target="targetIndex: 0" id="target-a">
         <a-entity 
           id="model-a"
-          data-src="./titan_model_A.glb" 
+          gltf-model="src: url(./titan_model_A.glb); dracoDecoderPath: https://www.gstatic.com/draco/versioned/decoders/1.5.6/;"
           position="0 0 0" rotation="0 0 0" scale="0.5 0.5 0.5" 
           class="clickable" visible="false"
           animation-mixer="clip: *; loop: repeat;"
@@ -545,11 +536,11 @@
         </a-entity>
       </a-entity>
 
-      <!-- Target B -->
+      <!-- Target B (計算) -->
       <a-entity mindar-image-target="targetIndex: 1" id="target-b">
         <a-entity 
           id="model-b"
-          data-src="./titan_model_B.glb" 
+          gltf-model="src: url(./titan_model_B.glb); dracoDecoderPath: https://www.gstatic.com/draco/versioned/decoders/1.5.6/;"
           position="0 0 0" rotation="0 0 0" scale="0.5 0.5 0.5" 
           class="clickable" visible="false"
           animation-mixer="clip: *; loop: repeat;"
@@ -557,11 +548,11 @@
         </a-entity>
       </a-entity>
 
-      <!-- Target C -->
+      <!-- Target C (隱藏版，不計入UI顯示) -->
       <a-entity mindar-image-target="targetIndex: 2" id="target-c">
         <a-entity 
           id="model-c"
-          data-src="./titan_model_C.glb" 
+          gltf-model="src: url(./titan_model_C.glb); dracoDecoderPath: https://www.gstatic.com/draco/versioned/decoders/1.5.6/;"
           position="0 0 0" rotation="0 0 0" scale="0.5 0.5 0.5" 
           class="clickable" visible="false"
           animation-mixer="clip: *; loop: repeat;"
